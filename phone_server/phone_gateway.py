@@ -35,35 +35,40 @@ def log_telemetry(dbm, esp_success):
 
 def get_cellular_signal_dbm():
     """
-    Executes termux-cellularinfo or termux-telemetry to read raw dBm.
-    Requires: termux-api package and Termux:API Android companion app.
+    Reads raw cellular dBm using termux-cellularinfo or dumpsys telephony.
     """
+    # Method 1: Try termux-cellularinfo
     try:
-        # Try termux-cellularinfo first
-        result = subprocess.run(['termux-cellularinfo'], capture_output=True, text=True, timeout=5)
+        result = subprocess.run(['termux-cellularinfo'], capture_output=True, text=True, timeout=3)
         if result.returncode == 0 and result.stdout.strip():
             data = json.loads(result.stdout)
             if isinstance(data, list) and len(data) > 0:
-                cell_info = data[0]
-                dbm = cell_info.get('dbm') or cell_info.get('signal_strength')
-                if dbm is not None:
+                dbm = data[0].get('dbm') or data[0].get('signal_strength') or data[0].get('rsrp')
+                if dbm is not None and dbm != 2147483647:
                     return int(dbm)
             elif isinstance(data, dict):
-                dbm = data.get('dbm') or data.get('signal_strength')
-                if dbm is not None:
+                dbm = data.get('dbm') or data.get('signal_strength') or data.get('rsrp')
+                if dbm is not None and dbm != 2147483647:
                     return int(dbm)
-    except Exception as e:
+    except Exception:
         pass
 
+    # Method 2: Fallback to Android System Telephony Registry (100% reliable)
     try:
-        # Fallback to termux-telemetry
-        result = subprocess.run(['termux-telemetry'], capture_output=True, text=True, timeout=5)
+        result = subprocess.run(['dumpsys', 'telephony.registry'], capture_output=True, text=True, timeout=3)
         if result.returncode == 0 and result.stdout.strip():
-            data = json.loads(result.stdout)
-            if isinstance(data, dict):
-                dbm = data.get('dbm') or data.get('signal_strength')
-                if dbm is not None:
-                    return int(dbm)
+            import re
+            # Match rsrp=-109 or rssi=-85
+            rsrp_match = re.search(r'rsrp\s*=\s*(-?\d+)', result.stdout)
+            if rsrp_match:
+                val = int(rsrp_match.group(1))
+                if val != 2147483647 and val < 0:
+                    return val
+            rssi_match = re.search(r'rssi\s*=\s*(-?\d+)', result.stdout)
+            if rssi_match:
+                val = int(rssi_match.group(1))
+                if val != 2147483647 and val < 0:
+                    return val
     except Exception as e:
         pass
 
