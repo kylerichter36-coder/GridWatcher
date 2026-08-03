@@ -318,22 +318,12 @@ void drawFrame() {
   int y = 0;
 
   // ============================================================
-  // TITLE BAR: "GRIDWATCHR" left, uptime right
+  // TITLE BAR: "GRIDWATCHR" centered
   // ============================================================
   canvas.setTextSize(1);
   canvas.setTextColor(cur.white);
   canvas.setCursor(2, 2);
   canvas.print("GRIDWATCHR");
-
-  // Uptime on the right side of title bar
-  unsigned long upSecs = millis() / 1000UL;
-  unsigned long upH = upSecs / 3600UL;
-  unsigned long upM = (upSecs % 3600UL) / 60UL;
-  unsigned long upS = upSecs % 60UL;
-  // Right-align: "HH:MM:SS" = 8 chars * 6px = 48px wide
-  canvas.setCursor(SCR_W - 50, 2);
-  canvas.setTextColor(cur.dim);
-  canvas.printf("%02lu:%02lu", upH, upM);
   
   canvas.drawFastHLine(0, 11, SCR_W, cur.line);
 
@@ -509,7 +499,7 @@ void drawFrame() {
   canvas.drawFastHLine(0, y, SCR_W, cur.line);
 
   // ============================================================
-  // FOOTER: Connection status
+  // FOOTER: Connection status + uptime
   // ============================================================
   y += 3;
   canvas.setCursor(2, y);
@@ -526,6 +516,16 @@ void drawFrame() {
     canvas.setTextColor(cur.dim);
     canvas.printf(" %.0fpps", rxRate);
   }
+
+  // Uptime on second footer line
+  y += 10;
+  unsigned long upSecs = millis() / 1000UL;
+  unsigned long upH = upSecs / 3600UL;
+  unsigned long upM = (upSecs % 3600UL) / 60UL;
+  unsigned long upS = upSecs % 60UL;
+  canvas.setTextColor(cur.dim);
+  canvas.setCursor(2, y);
+  canvas.printf("UP %02lu:%02lu:%02lu", upH, upM, upS);
 
   // Push to display
   tft.drawRGBBitmap(0, 0, canvas.getBuffer(), SCR_W, SCR_H);
