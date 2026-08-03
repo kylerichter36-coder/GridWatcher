@@ -35,9 +35,17 @@ def log_telemetry_row(cell_dbm, voltage=230.0, freq=50.0, batt=100, seq=0):
     # Outage flag: 1 if voltage drops below 180V or frequency drops below 47Hz, else 0
     outage_flag = 1 if (voltage < 180.0 or freq < 47.0) else 0
     timestamp = datetime.now().isoformat()
+    row = f"{timestamp},{cell_dbm},{voltage},{freq},{batt},{seq},{outage_flag}"
+    
+    # Log to local PC file
     with open(CSV_FILE, 'a', newline='') as f:
-        writer = csv.writer(f)
-        writer.writerow([timestamp, cell_dbm, voltage, freq, batt, seq, outage_flag])
+        f.write(row + "\n")
+        
+    # Also log to phone's /sdcard/Download so user can pull it via USB
+    try:
+        subprocess.run([ADB_PATH, 'shell', f'echo "{row}" >> /sdcard/Download/gridwatcher_dataset.csv'], timeout=2)
+    except Exception as e:
+        print(f"Failed to log to phone sdcard: {e}")
 
 def get_live_rsrp():
     try:
