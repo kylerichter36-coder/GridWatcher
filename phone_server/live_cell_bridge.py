@@ -28,14 +28,12 @@ def init_csv():
     if not os.path.exists(CSV_FILE):
         with open(CSV_FILE, 'w', newline='') as f:
             writer = csv.writer(f)
-            writer.writerow(['timestamp', 'cell_dbm', 'voltage_v', 'frequency_hz', 'base_battery_pct', 'sequence', 'outage_flag'])
+            writer.writerow(['timestamp', 'voltage_v', 'frequency_hz'])
 
 def log_telemetry_row(cell_dbm, voltage=230.0, freq=50.0, batt=100, seq=0):
     init_csv()
-    # Outage flag: 1 if voltage drops below 180V or frequency drops below 47Hz, else 0
-    outage_flag = 1 if (voltage < 180.0 or freq < 47.0) else 0
     timestamp = datetime.now().isoformat()
-    row = f"{timestamp},{cell_dbm},{voltage},{freq},{batt},{seq},{outage_flag}"
+    row = f"{timestamp},{voltage},{freq}"
     
     # Log to local PC file
     with open(CSV_FILE, 'a', newline='') as f:
