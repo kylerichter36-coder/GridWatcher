@@ -1,9 +1,12 @@
 /*
   GridWatcher: Base Station (Transmitter)
   Hardware: FireBeetle 2 ESP32-C6, SX1262 LoRa, MT3608 Step-up
-  Description: Acts as the off-grid power and cellular monitoring hub. 
-  It handles a dual-mode WiFi stack (AP + STA), hosts a webserver for a smartphone SMS gateway, 
-  and transmits telemetry via LoRa.
+  
+  Fixes applied:
+  - Replaced String concatenation with snprintf (prevents heap fragmentation crash)
+  - Added radio TX timeout recovery (prevents permanent hang on stuck DIO1)
+  - Disabled WiFi STA auto-reconnect (prevents background scan interference)
+  - Added watchdog-safe yield() calls
 
   LoRa Packet Format:
   V:<voltage>,F:<freq>,B:<base_batt>,S:<cell_dbm>,PB:<phone_batt>,SEQ:<seq>
@@ -17,29 +20,20 @@
 // ==============================================================================
 // [1] HARDWARE & PIN DEFINITIONS
 // ==============================================================================
-
-// LoRa SPI & Control Pins (Mapped for the ESP32-C6 RISC-V Architecture)
 #define LORA_CS   14
 #define LORA_DIO1 4
 #define LORA_RST  1
 #define LORA_BUSY 5
-// Note: RXEN/TXEN header pins are driven internally by the chip's own DIO2 
-// on this module, avoiding the need for manual GPIO RF switching.
 
-// Power Sensing
-#define PIN_BAT 0   // A0 - Onboard FireBeetle 2 C6 battery-sense voltage divider
+#define PIN_BAT 0
 
 // ==============================================================================
 // [2] NETWORK CONFIGURATION (DUAL MODE WIFI)
 // ==============================================================================
-// The ESP32 operates in AP+STA mode. 
-// STA (Station) connects to the main home router.
-// AP (Access Point) broadcasts its own network. During a grid failure, 
-// the router dies, but the AP remains active on battery power for local devices.
 const char* homeSSID = "YOUR_HOME_WIFI_NAME";      
 const char* homePass = "YOUR_HOME_WIFI_PASSWORD";  
 const char* apSSID   = "GridWatcher-Home";
-const char* apPass   = "gridwatcher123";            // Minimum 8 characters for WPA2
+const char* apPass   = "gridwatcher123";
 
 WebServer server(80);
 
@@ -48,40 +42,57 @@ WebServer server(80);
 // ==============================================================================
 SX1262 radio = new Module(LORA_CS, LORA_DIO1, LORA_RST, LORA_BUSY);
 
-// Telemetry State
-int cellSignalDbm = -999;           // -999 indicates no reading received yet from the phone
-int phoneBatteryPercent = -1;       // -1 = no reading yet; updated via /signal POST
-unsigned long lastCellUpdate = 0;   // Timestamp of last cellular ping
-unsigned long lastWifiCheck = 0;
-unsigned long lastSendTime = 0;     // Timestamp for LoRa TX pacing
-unsigned long packetSequence = 0;   // Rolling packet counter to detect dropped packets
+int cellSignalDbm = -999;
+int phoneBatteryPercent = -1;
+unsigned long lastCellUpdate = 0;
+unsigned long lastSendTime = 0;
+unsigned long packetSequence = 0;
 int batteryPercent = 100;
+
+// Radio health tracking
+unsigned long lastSuccessfulTx = 0;
+int consecutiveTxFails = 0;
+#define MAX_TX_FAILS 5          // Reinitialize radio after this many consecutive failures
+#define TX_WATCHDOG_MS 10000    // If no successful TX in 10s, force radio reset
+
+// Pre-allocated payload buffer (avoids String heap fragmentation)
+char payload[128];
 
 // ==============================================================================
 // [4] HARDWARE & SENSOR FUNCTIONS
 // ==============================================================================
-
-/**
- * Reads the internal LiPo battery voltage via the onboard divider.
- * Converts millivolts to a 0-100% scale based on standard 3.3V-4.2V LiPo curves.
- */
 void readBattery() {
   int mv = analogReadMilliVolts(PIN_BAT);
-  int batteryMilliVolts = mv * 2; // Voltage divider math
+  int batteryMilliVolts = mv * 2;
   float pct = (batteryMilliVolts - 3300) / (4200.0 - 3300.0) * 100.0;
   batteryPercent = constrain((int)pct, 0, 100);
+}
+
+/**
+ * Emergency radio reinitialization.
+ * Called when the SX1262 gets stuck (missed interrupt, TX hang, etc.)
+ */
+void reinitRadio() {
+  Serial.println("[RADIO] Reinitializing SX1262 after TX failure...");
+  
+  // Hard reset the module via its RST pin
+  radio.reset();
+  delay(10);
+  
+  int state = radio.begin(868.0, 125.0, 9, 7, 0x12, 22, 8, 1.6, false);
+  if (state == RADIOLIB_ERR_NONE) {
+    radio.setDio2AsRfSwitch(true);
+    consecutiveTxFails = 0;
+    Serial.println("[RADIO] Reinitialized successfully!");
+  } else {
+    Serial.print("[RADIO] Reinit FAILED, code: ");
+    Serial.println(state);
+  }
 }
 
 // ==============================================================================
 // [5] WEBSERVER & HTTP ENDPOINTS
 // ==============================================================================
-
-/**
- * HTTP POST /signal
- * The PC bridge script hits this endpoint to update the current cellular 
- * network strength and phone battery level.
- * Body: value=<dBm>&phone_battery=<pct>
- */
 void handleSignal() {
   if (server.hasArg("value")) {
     cellSignalDbm = server.arg("value").toInt();
@@ -89,7 +100,6 @@ void handleSignal() {
     Serial.print("[WiFi] Cell signal received: ");
     Serial.print(cellSignalDbm);
     
-    // Parse phone battery if included
     if (server.hasArg("phone_battery")) {
       phoneBatteryPercent = server.arg("phone_battery").toInt();
       Serial.print(" | Phone Batt: ");
@@ -104,20 +114,17 @@ void handleSignal() {
   }
 }
 
-/**
- * HTTP GET /status
- * Provides a real-time JSON snapshot of the base station state. 
- * Essential for future expansion into remote dashboards or database logging.
- */
 void handleStatus() {
-  String json = "{";
-  json += "\"cellSignalDbm\":" + String(cellSignalDbm) + ",";
-  json += "\"phoneBatteryPercent\":" + String(phoneBatteryPercent) + ",";
-  json += "\"batteryPercent\":" + String(batteryPercent) + ",";
-  json += "\"packetSequence\":" + String(packetSequence) + ",";
-  json += "\"staConnected\":" + String(WiFi.status() == WL_CONNECTED ? "true" : "false") + ",";
-  json += "\"staIP\":\"" + WiFi.localIP().toString() + "\"";
-  json += "}";
+  // Use snprintf instead of String concatenation
+  char json[256];
+  snprintf(json, sizeof(json),
+    "{\"cellSignalDbm\":%d,\"phoneBatteryPercent\":%d,\"batteryPercent\":%d,"
+    "\"packetSequence\":%lu,\"staConnected\":%s,\"staIP\":\"%s\",\"txFails\":%d}",
+    cellSignalDbm, phoneBatteryPercent, batteryPercent,
+    packetSequence,
+    (WiFi.status() == WL_CONNECTED) ? "true" : "false",
+    WiFi.localIP().toString().c_str(),
+    consecutiveTxFails);
   server.send(200, "application/json", json);
 }
 
@@ -126,47 +133,43 @@ void handleStatus() {
 // ==============================================================================
 void setup() {
   Serial.begin(115200);
-  
-  // Give the native USB CDC port time to open and connect to the PC
   delay(2500); 
 
   Serial.println("\n[ESP32-C6] Booting GridWatcher Home Sender...");
   analogReadResolution(12);
   
-  // Initialize Hardware SPI (SCK=23, MISO=21, MOSI=22)
-  // Hard-wiring this bus prevents bit-banging conflicts
   SPI.begin(23, 21, 22);
 
-  // Initialize the SX1262 Radio (RadioLib bypasses standard library RISC-V compiler issues)
-  // Set TX Power to maximum +22 dBm (158 mW) for maximum RF reach and obstacle penetration
-  Serial.print("[SX1262] Initializing Radio (868MHz, SF9, BW125, +22dBm Max Power) ... ");
+  Serial.print("[SX1262] Initializing Radio (868MHz, SF9, BW125, +22dBm) ... ");
   int state = radio.begin(868.0, 125.0, 9, 7, 0x12, 22, 8, 1.6, false);
   
   if (state == RADIOLIB_ERR_NONE) {
     Serial.println("Success!");
-    // Crucial: Instructs the SX1262 to drive its own RF switch via its internal DIO2 pin
     radio.setDio2AsRfSwitch(true);
+    lastSuccessfulTx = millis();
   } else {
     Serial.print("Failed with code: ");
     Serial.println(state);
-    Serial.println("Check SPI wiring and RISC-V pin configurations.");
-    while (true); // Halt execution on catastrophic RF failure
+    Serial.println("Check SPI wiring and pin configurations.");
+    while (true) { delay(1000); } // Halt on RF failure
   }
   
   Serial.println("Setup complete. Starting transmission loop...");
 
-  // Initialize Dual-Mode WiFi Stack
+  // Initialize WiFi - AP mode is critical, STA is optional
   WiFi.mode(WIFI_AP_STA);
   WiFi.softAP(apSSID, apPass);
-  Serial.print("[WiFi] AP started. Connect phone to '");
+  Serial.print("[WiFi] AP started: '");
   Serial.print(apSSID);
   Serial.print("' -> IP: ");
   Serial.println(WiFi.softAPIP());
 
-  WiFi.begin(homeSSID, homePass); // Non-blocking, retries in background
-  Serial.println("[WiFi] STA connecting to home WiFi in background...");
+  // Attempt STA connection but disable aggressive auto-reconnect
+  // This prevents background WiFi scans from interfering with LoRa SPI timing
+  WiFi.setAutoReconnect(false);
+  WiFi.begin(homeSSID, homePass);
+  Serial.println("[WiFi] STA connecting (auto-reconnect disabled to protect LoRa)...");
 
-  // Bind and start the web server routes
   server.on("/signal", HTTP_POST, handleSignal);
   server.on("/status", HTTP_GET, handleStatus);
   server.begin();
@@ -177,53 +180,66 @@ void setup() {
 // [7] MAIN RUNTIME LOOP
 // ==============================================================================
 void loop() {
-  // Process incoming HTTP requests from the SMS Gateway phone
+  // Process incoming HTTP requests
   server.handleClient();
+  
+  // Feed the watchdog
+  yield();
 
-  String payload = "";
+  bool hasPayload = false;
 
-  // Allow manual payload injection via serial monitor for debugging
+  // Allow manual payload injection via serial monitor
   if (Serial.available() > 0) {
-    payload = Serial.readStringUntil('\n');
-    payload.trim();
+    String manual = Serial.readStringUntil('\n');
+    manual.trim();
+    manual.toCharArray(payload, sizeof(payload));
     packetSequence++;
+    hasPayload = true;
   } 
-  // Trigger automatic telemetry broadcast every 1000ms (1 Hz)
+  // Automatic telemetry broadcast every 1000ms
   else if (millis() - lastSendTime >= 1000) {
     lastSendTime = millis();
     packetSequence++;
     readBattery();
 
-    // ---------------------------------------------------------
-    // ZMPT101B Telemetry Simulation
-    // ---------------------------------------------------------
-    // The active ZMPT101B modules are currently back-ordered. 
-    // This logic generates a realistic, floating AC voltage (~230V) 
-    // and frequency (~50Hz) to test the radio throughput and UI logic.
-    float simulatedACVoltage = 230.0 + random(-15, 16) / 10.0;
-    float simulatedFrequency = 49.9 + random(0, 3) / 10.0;
+    // Simulated AC readings (replace with real ZMPT101B when available)
+    float simV = 230.0 + random(-15, 16) / 10.0;
+    float simF = 49.9 + random(0, 3) / 10.0;
 
-    // Construct the comma-separated data packet
-    // NEW: PB:<phone_battery> field added between S: and SEQ:
-    payload = "V:" + String(simulatedACVoltage, 1) + 
-              ",F:" + String(simulatedFrequency, 2) + 
-              ",B:" + String(batteryPercent) +
-              ",S:" + String(cellSignalDbm) +
-              ",PB:" + String(phoneBatteryPercent) +
-              ",SEQ:" + String(packetSequence);
+    // Build payload using snprintf (zero heap allocation, no fragmentation)
+    snprintf(payload, sizeof(payload),
+      "V:%.1f,F:%.2f,B:%d,S:%d,PB:%d,SEQ:%lu",
+      simV, simF, batteryPercent, cellSignalDbm, phoneBatteryPercent, packetSequence);
+    hasPayload = true;
   }
 
-  // Transmit the payload over the LoRa RF link
-  if (payload.length() > 0) {
-    Serial.print("TX [" + String(packetSequence) + "]: " + payload);
+  // Transmit
+  if (hasPayload) {
+    Serial.print("TX [");
+    Serial.print(packetSequence);
+    Serial.print("]: ");
+    Serial.print(payload);
     
-    // Transmit blocking - ensures clean RF state before continuing
     int state = radio.transmit(payload);
 
     if (state == RADIOLIB_ERR_NONE) {
       Serial.println(" -> OK");
+      lastSuccessfulTx = millis();
+      consecutiveTxFails = 0;
     } else {
-      Serial.println(" -> FAIL (Code: " + String(state) + ")");
+      Serial.print(" -> FAIL (Code: ");
+      Serial.print(state);
+      Serial.println(")");
+      consecutiveTxFails++;
     }
+  }
+
+  // ---- Radio Watchdog ----
+  // If too many consecutive failures or no successful TX in 10 seconds,
+  // force a radio reset to recover from stuck states
+  if (consecutiveTxFails >= MAX_TX_FAILS || 
+      (lastSuccessfulTx > 0 && millis() - lastSuccessfulTx > TX_WATCHDOG_MS)) {
+    reinitRadio();
+    lastSuccessfulTx = millis(); // Reset watchdog timer after reinit
   }
 }
