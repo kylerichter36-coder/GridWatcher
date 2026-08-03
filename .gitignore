@@ -1,3 +1,8 @@
+# Sensitive credentials
+secrets.h
+config.h
+*.env
+
 # VS Code
 .vscode/
 *.code-workspace
