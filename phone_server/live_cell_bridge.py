@@ -15,7 +15,7 @@ ADB_PATH = r"c:\Users\school\Downloads\platform-tools\adb.exe"
 
 def get_live_rsrp():
     try:
-        res = subprocess.run([ADB_PATH, 'shell', 'dumpsys telephony.registry | grep -i mSignalStrength'], capture_output=True, text=True, timeout=3)
+        res = subprocess.run([ADB_PATH, 'shell', 'dumpsys', 'telephony.registry'], capture_output=True, text=True, timeout=10)
         if res.returncode == 0 and res.stdout:
             rsrp_matches = re.findall(r'rsrp\s*=\s*(-?\d+)', res.stdout)
             for val_str in rsrp_matches:
