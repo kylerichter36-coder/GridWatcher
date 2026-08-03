@@ -122,8 +122,9 @@ void setup() {
   SPI.begin(23, 21, 22);
 
   // Initialize the SX1262 Radio (RadioLib bypasses standard library RISC-V compiler issues)
-  Serial.print("[SX1262] Initializing Radio ... ");
-  int state = radio.begin(868.0, 125.0, 9, 7, 0x12, 10, 8, 1.6, false);
+  // Set TX Power to maximum +22 dBm (158 mW) for maximum RF reach and obstacle penetration
+  Serial.print("[SX1262] Initializing Radio (868MHz, SF9, BW125, +22dBm Max Power) ... ");
+  int state = radio.begin(868.0, 125.0, 9, 7, 0x12, 22, 8, 1.6, false);
   
   if (state == RADIOLIB_ERR_NONE) {
     Serial.println("Success!");
