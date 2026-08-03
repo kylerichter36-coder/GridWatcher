@@ -3,9 +3,10 @@
 GridWatcher: Live Cellular Telemetry Bridge & ML Dataset Logger
 Description:
 1. Reads real-time cellular signal strength (RSRP dBm) from the phone via ADB USB.
-2. Posts signal strength to the ESP32 Base Station (192.168.4.1/signal).
-3. Automatically logs time-series grid telemetry into gridwatcher_dataset.csv for ML training.
-4. Hosts a web dashboard and CSV download server on port 8080 for easy access from your big PC!
+2. Reads the phone's battery percentage via ADB.
+3. Posts signal strength + phone battery to the ESP32 Base Station (192.168.4.1/signal).
+4. Automatically logs time-series grid telemetry into gridwatcher_dataset.csv for ML training.
+5. Hosts a web dashboard and CSV download server on port 8080 for easy access from your big PC!
 """
 
 import subprocess
@@ -63,8 +64,20 @@ def get_live_rsrp():
         pass
     return -999
 
-def send_signal_to_esp32(dbm):
-    body = f"value={dbm}"
+def get_phone_battery():
+    """Read the phone's battery percentage via ADB dumpsys battery."""
+    try:
+        res = subprocess.run([ADB_PATH, 'shell', 'dumpsys', 'battery'], capture_output=True, text=True, timeout=5)
+        if res.returncode == 0 and res.stdout:
+            match = re.search(r'level:\s*(\d+)', res.stdout)
+            if match:
+                return int(match.group(1))
+    except Exception:
+        pass
+    return -1
+
+def send_signal_to_esp32(dbm, phone_batt):
+    body = f"value={dbm}&phone_battery={phone_batt}"
     content_len = len(body)
     http_request = f"POST /signal HTTP/1.1\\r\\nHost: 192.168.4.1\\r\\nContent-Type: application/x-www-form-urlencoded\\r\\nContent-Length: {content_len}\\r\\nConnection: close\\r\\n\\r\\n{body}"
     cmd = f"echo -e '{http_request}' | nc -w 2 192.168.4.1 80"
@@ -72,11 +85,11 @@ def send_signal_to_esp32(dbm):
     try:
         res = subprocess.run([ADB_PATH, 'shell', cmd], capture_output=True, text=True, timeout=4)
         if "200 OK" in res.stdout or "OK" in res.stdout:
-            print(f"[{datetime.now().strftime('%H:%M:%S')}] SUCCESS: Live Cell Signal {dbm} dBm delivered to ESP32 Base Station!", flush=True)
+            print(f"[{datetime.now().strftime('%H:%M:%S')}] SUCCESS: Cell {dbm}dBm | Phone Batt {phone_batt}% -> ESP32", flush=True)
             log_telemetry_row(dbm)
             return True
         else:
-            print(f"[{datetime.now().strftime('%H:%M:%S')}] Sent {dbm} dBm -> ESP32 Response: {res.stdout.strip()}", flush=True)
+            print(f"[{datetime.now().strftime('%H:%M:%S')}] Sent {dbm}dBm PB:{phone_batt}% -> ESP32 Response: {res.stdout.strip()}", flush=True)
             log_telemetry_row(dbm)
             return True
     except Exception as e:
@@ -112,6 +125,7 @@ def main():
     print("  GridWatcher Telemetry Bridge & ML Dataset Logger")
     print(f"  Live CSV Logger: {CSV_FILE}")
     print(f"  Dataset Web Download Server: http://localhost:{PORT}/download")
+    print("  NEW: Phone battery monitoring enabled")
     print("=" * 70, flush=True)
 
     init_csv()
@@ -122,10 +136,11 @@ def main():
 
     while True:
         dbm = get_live_rsrp()
+        phone_batt = get_phone_battery()
         if dbm != -999:
-            send_signal_to_esp32(dbm)
+            send_signal_to_esp32(dbm, phone_batt)
         else:
-            print(f"[{datetime.now().strftime('%H:%M:%S')}] Searching for active cellular signal...", flush=True)
+            print(f"[{datetime.now().strftime('%H:%M:%S')}] Searching for active cellular signal... (Phone Batt: {phone_batt}%)", flush=True)
         time.sleep(2)
 
 if __name__ == "__main__":

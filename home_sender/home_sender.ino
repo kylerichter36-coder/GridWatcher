@@ -4,6 +4,9 @@
   Description: Acts as the off-grid power and cellular monitoring hub. 
   It handles a dual-mode WiFi stack (AP + STA), hosts a webserver for a smartphone SMS gateway, 
   and transmits telemetry via LoRa.
+
+  LoRa Packet Format:
+  V:<voltage>,F:<freq>,B:<base_batt>,S:<cell_dbm>,PB:<phone_batt>,SEQ:<seq>
 */
 
 #include <SPI.h>
@@ -47,6 +50,7 @@ SX1262 radio = new Module(LORA_CS, LORA_DIO1, LORA_RST, LORA_BUSY);
 
 // Telemetry State
 int cellSignalDbm = -999;           // -999 indicates no reading received yet from the phone
+int phoneBatteryPercent = -1;       // -1 = no reading yet; updated via /signal POST
 unsigned long lastCellUpdate = 0;   // Timestamp of last cellular ping
 unsigned long lastWifiCheck = 0;
 unsigned long lastSendTime = 0;     // Timestamp for LoRa TX pacing
@@ -74,15 +78,26 @@ void readBattery() {
 
 /**
  * HTTP POST /signal
- * The repurposed Android phone running Termux hits this endpoint to update 
- * the current cellular network strength. (e.g., curl -X POST http://<IP>/signal -d "value=-85")
+ * The PC bridge script hits this endpoint to update the current cellular 
+ * network strength and phone battery level.
+ * Body: value=<dBm>&phone_battery=<pct>
  */
 void handleSignal() {
   if (server.hasArg("value")) {
     cellSignalDbm = server.arg("value").toInt();
     lastCellUpdate = millis();
     Serial.print("[WiFi] Cell signal received: ");
-    Serial.println(cellSignalDbm);
+    Serial.print(cellSignalDbm);
+    
+    // Parse phone battery if included
+    if (server.hasArg("phone_battery")) {
+      phoneBatteryPercent = server.arg("phone_battery").toInt();
+      Serial.print(" | Phone Batt: ");
+      Serial.print(phoneBatteryPercent);
+      Serial.print("%");
+    }
+    Serial.println();
+    
     server.send(200, "text/plain", "OK");
   } else {
     server.send(400, "text/plain", "missing value param");
@@ -97,6 +112,7 @@ void handleSignal() {
 void handleStatus() {
   String json = "{";
   json += "\"cellSignalDbm\":" + String(cellSignalDbm) + ",";
+  json += "\"phoneBatteryPercent\":" + String(phoneBatteryPercent) + ",";
   json += "\"batteryPercent\":" + String(batteryPercent) + ",";
   json += "\"packetSequence\":" + String(packetSequence) + ",";
   json += "\"staConnected\":" + String(WiFi.status() == WL_CONNECTED ? "true" : "false") + ",";
@@ -188,10 +204,12 @@ void loop() {
     float simulatedFrequency = 49.9 + random(0, 3) / 10.0;
 
     // Construct the comma-separated data packet
+    // NEW: PB:<phone_battery> field added between S: and SEQ:
     payload = "V:" + String(simulatedACVoltage, 1) + 
               ",F:" + String(simulatedFrequency, 2) + 
               ",B:" + String(batteryPercent) +
               ",S:" + String(cellSignalDbm) +
+              ",PB:" + String(phoneBatteryPercent) +
               ",SEQ:" + String(packetSequence);
   }
 
