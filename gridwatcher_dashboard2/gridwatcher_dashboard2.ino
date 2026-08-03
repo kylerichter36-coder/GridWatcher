@@ -174,26 +174,49 @@ void pollBootButton() {
 }
 
 /**
- * Reads local battery voltage and attempts to calculate if the device is currently charging.
+ * Reads local battery voltage with Exponential Moving Average (EMA) noise filtering.
+ * Uses a 10-second rolling trend window with hysteresis to accurately detect 
+ * charging without flickering due to ADC noise.
  */
 void readBattery() {
-  prevBatteryMilliVolts = batteryMilliVolts;
-
+  // Take 20 ADC samples to smooth out raw ADC noise
   long sum = 0;
-  int samples = 10;
-  for (int i = 0; i < samples; i++) {
+  for (int i = 0; i < 20; i++) {
     sum += analogReadMilliVolts(PIN_BAT);
-    delay(2);
+    delayMicroseconds(250);
   }
-  int avgMv = sum / samples;
-  batteryMilliVolts = avgMv * 2;
+  int rawMv = (sum / 20) * 2; // Voltage divider math (1:1 divider on FireBeetle 2)
 
-  float pct = (batteryMilliVolts - 3300) / (4200.0 - 3300.0) * 100.0;
+  // Exponential Moving Average filter to smooth ADC jitter
+  static float smoothedMv = 0;
+  if (smoothedMv == 0) smoothedMv = rawMv;
+  else smoothedMv = (smoothedMv * 0.85) + (rawMv * 0.15);
+
+  batteryMilliVolts = (int)smoothedMv;
+
+  // Percentage calculation based on standard 3.3V-4.2V LiPo curve
+  float pct = ((float)batteryMilliVolts - 3300.0) / (4200.0 - 3300.0) * 100.0;
   batteryPercent = constrain((int)pct, 0, 100);
 
-  if (batteryMilliVolts < 4180) {
-    isCharging = (batteryMilliVolts - prevBatteryMilliVolts) > 2;
-  } else {
+  // --- Rolling 10-Second Voltage Trend for Charging Detection ---
+  static int vHistory[10] = {0};
+  static int historyIdx = 0;
+  static unsigned long lastHistTime = 0;
+
+  if (millis() - lastHistTime >= 1000 || lastHistTime == 0) {
+    lastHistTime = millis();
+    vHistory[historyIdx] = batteryMilliVolts;
+    historyIdx = (historyIdx + 1) % 10;
+  }
+
+  // Compare current voltage against 10-second historical baseline
+  int oldestSample = vHistory[historyIdx];
+  int trendDelta = (oldestSample > 0) ? (batteryMilliVolts - oldestSample) : 0;
+
+  // Hysteresis Latching: Prevents charging icon from flickering randomly
+  if (trendDelta >= 15 || (batteryMilliVolts >= 4150 && trendDelta >= -5)) {
+    isCharging = true;
+  } else if (trendDelta <= 2 && batteryMilliVolts < 4120) {
     isCharging = false;
   }
 }
