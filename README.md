@@ -62,8 +62,36 @@ Rather than relying purely on a phone for data visualization, the system include
 
 * **Hardware:** FireBeetle 2 ESP32 C6 paired with a 76x284 long strip ST7789 TFT display and an SX1262 LoRa module.
 * **SPI Management:** Both the TFT display and the LoRa module share a single, properly configured **hardware SPI bus**, completely avoiding software bit banging conflicts.
-* **UI Features:** Renders a real time rolling graph of the AC voltage history, local/remote battery percentages, and LoRa link quality (RSSI, SNR, packet loss).
 * **Power Management:** Implements auto sleep after 5 minutes of inactivity, with a hardware wake and light/dark theme toggle wired to the BOOT pin.
+
+### 4.1 Dashboard UI (v2)
+The display is organized into five clean sections, top to bottom:
+
+| Section | Contents |
+|---|---|
+| **WIRELESS** | LoRa link dBm, link quality %, cell signal dBm, packet loss % |
+| **READINGS** | AC voltage (large font), frequency, rolling voltage trend graph |
+| **BATTERIES** | Three battery icons: Handheld (HND), Home base (HME), Phone (PHN) |
+| **AI PREDICT** | Outage risk state (STABLE / WARNING / OUTAGE), risk percentage bar |
+| **FOOTER** | Live/offline status with uptime counter |
+
+### 4.2 LoRa Packet Format (v2)
+```
+V:<voltage>,F:<freq>,B:<base_batt>,S:<cell_dbm>,PB:<phone_batt>,SEQ:<seq>
+```
+The `PB:` field carries the phone's battery percentage, relayed through the base station.
+
+***
+
+## 4.5 Live Telemetry Bridge (PC to Phone to ESP32)
+
+The `live_cell_bridge.py` script runs on the PC and acts as the central data pipeline:
+
+1. **Reads cellular signal** from the phone via `adb shell dumpsys telephony.registry`.
+2. **Reads phone battery** via `adb shell dumpsys battery`.
+3. **Posts both values** to the ESP32 Base Station over the phone's WiFi connection to the AP.
+4. **Logs ML training data** (timestamp, voltage, frequency) to a local CSV and to the phone's `/sdcard/Download/` for USB retrieval.
+5. **Hosts a web server** on port 8080 for easy CSV download from any device on the network.
 
 ***
 
