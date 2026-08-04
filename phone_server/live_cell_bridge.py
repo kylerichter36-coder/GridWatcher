@@ -135,21 +135,33 @@ def get_live_rsrp():
                     is_registered = (reg is True or reg == "true" or reg == 1 or reg == "YES")
                     
                     if is_registered:
+                        # Check flat keys first
+                        for key in ("rsrp", "dbm", "rssi", "ssRsrp", "ss_rsrp"):
+                            val = cell.get(key)
+                            if isinstance(val, (int, float)) and val < 0 and val > -140:
+                                return int(val)
+                        
+                        # Check nested keys
                         sig = cell.get("cell_signal_strength", {})
-                        for key, val in sig.items():
-                            k_lower = key.lower()
-                            if ("rsrp" in k_lower or "dbm" in k_lower or "rssi" in k_lower) and isinstance(val, (int, float)):
-                                if val < 0 and val > -140:
-                                    return int(val)
+                        for key in ("rsrp", "dbm", "rssi", "ssRsrp", "ss_rsrp"):
+                            val = sig.get(key)
+                            if isinstance(val, (int, float)) and val < 0 and val > -140:
+                                return int(val)
                                     
                 # Second pass: fallback to any cell tower with a valid signal strength
                 for cell in cells:
+                    # Check flat keys first
+                    for key in ("rsrp", "dbm", "rssi", "ssRsrp", "ss_rsrp"):
+                        val = cell.get(key)
+                        if isinstance(val, (int, float)) and val < 0 and val > -140:
+                            return int(val)
+                    
+                    # Check nested keys
                     sig = cell.get("cell_signal_strength", {})
-                    for key, val in sig.items():
-                        k_lower = key.lower()
-                        if ("rsrp" in k_lower or "dbm" in k_lower or "rssi" in k_lower) and isinstance(val, (int, float)):
-                            if val < 0 and val > -140:
-                                return int(val)
+                    for key in ("rsrp", "dbm", "rssi", "ssRsrp", "ss_rsrp"):
+                        val = sig.get(key)
+                        if isinstance(val, (int, float)) and val < 0 and val > -140:
+                            return int(val)
         except Exception as e:
             print(f"[{_ts()}] Termux cellinfo error: {e}")
         return -999
