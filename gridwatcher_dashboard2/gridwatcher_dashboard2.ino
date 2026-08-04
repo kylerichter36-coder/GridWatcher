@@ -678,14 +678,21 @@ void loop() {
   pollBootButton();
   ledTick();
 
-  // RX Watchdog — if receivedFlag hasn't been set in RX_WATCHDOG_MS,
-  // the radio may have gotten stuck. Force re-arm startReceive().
+  // DIO1 POLLING FALLBACK — ESP32-C6 GPIO interrupts can silently fail to fire.
+  // The SX1262 holds DIO1 HIGH until the FIFO is read, so polling catches it.
+  // This runs every loop iteration (~microseconds) so latency is negligible.
+  if (!receivedFlag && digitalRead(LORA_DIO1) == HIGH) {
+    Serial.println("[LoRa] POLL caught DIO1 HIGH (ISR missed — interrupt may not be firing)");
+    receivedFlag = true;
+  }
+
+  // RX Watchdog — also re-attaches the interrupt on every re-arm as a recovery attempt
   if (millis() - lastRxArmTime > RX_WATCHDOG_MS && !receivedFlag) {
-    Serial.print("[LoRa] RX watchdog: re-arming startReceive()... ");
+    Serial.print("[LoRa] RX watchdog: re-arming + re-attaching interrupt... ");
+    radio.setPacketReceivedAction(onPacketReceived); // re-attach interrupt
     int startState = radio.startReceive();
     Serial.printf("result: %d\n", startState);
     lastRxArmTime = millis();
-    // Double-pulse so you can see self-heals without opening the terminal
     digitalWrite(LED_PIN, HIGH);
     ledOffMs = millis() + LED_ERR_MS;
   }
