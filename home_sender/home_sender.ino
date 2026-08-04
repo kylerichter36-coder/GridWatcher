@@ -439,7 +439,7 @@ void setup() {
     server.send(200, "text/plain", "OK");
     // If both confirmed and sender has a staged firmware, reboot into it
     if (handheldConfirmed && bridgeConfirmed && senderUpdatePending) {
-      Serial.println("[HUB] All devices updated — rebooting sender into new firmware!");
+      Serial.println("[HUB] All devices updated - rebooting sender into new firmware!");
       delay(500);
       ESP.restart();
     }
@@ -450,8 +450,8 @@ void setup() {
     server.send(200, "text/html", String(HUB_HTML));
   });
   server.on("/update", HTTP_POST, []() {
-    server.send(200, "text/plain", Update.hasError() ? "FAIL" : "OK — sender firmware staged");
-    // Do NOT restart here — wait for handheld + bridge to confirm first
+    server.send(200, "text/plain", Update.hasError() ? "FAIL" : "OK - sender firmware staged");
+    // Do NOT restart here - wait for handheld + bridge to confirm first
   }, []() {
     HTTPUpload& upload = server.upload();
     if (upload.status == UPLOAD_FILE_START) {
@@ -463,7 +463,7 @@ void setup() {
     } else if (upload.status == UPLOAD_FILE_END) {
       if (Update.end(true)) {
         senderUpdatePending = true;
-        Serial.printf("[HUB] Sender firmware staged (%u bytes) — waiting for devices\n",
+        Serial.printf("[HUB] Sender firmware staged (%u bytes) - waiting for devices\n",
                       upload.totalSize);
       } else {
         Update.printError(Serial);
