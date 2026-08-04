@@ -25,6 +25,21 @@ ESP32_HOST = "http://192.168.4.1"
 CSV_FILE = "gridwatcher_dataset.csv"
 PORT = 8080
 
+# Wireless ADB Configuration (Set to phone's IP address when running over WiFi)
+PHONE_IP = "192.168.4.2"  # Default IP when phone is connected to ESP32 AP
+
+def ensure_adb_connection():
+    """Ensure ADB is connected either via USB or Wireless WiFi ADB."""
+    try:
+        res = subprocess.run([ADB_PATH, 'devices'], capture_output=True, text=True, timeout=5)
+        if res.returncode == 0 and res.stdout:
+            lines = [l for l in res.stdout.splitlines() if 'device' in l and 'List' not in l]
+            if not lines:
+                print(f"[{datetime.now().strftime('%H:%M:%S')}] USB ADB not found. Attempting Wireless ADB to {PHONE_IP}:5555...")
+                subprocess.run([ADB_PATH, 'connect', f'{PHONE_IP}:5555'], capture_output=True, text=True, timeout=5)
+    except Exception as e:
+        pass
+
 def init_csv():
     if not os.path.exists(CSV_FILE):
         with open(CSV_FILE, 'w', newline='') as f:
@@ -135,6 +150,7 @@ def main():
     web_thread.start()
 
     while True:
+        ensure_adb_connection()
         dbm = get_live_rsrp()
         phone_batt = get_phone_battery()
         if dbm != -999:

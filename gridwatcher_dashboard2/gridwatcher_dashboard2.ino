@@ -25,7 +25,26 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_ST7789.h>
 #include <RadioLib.h>
+#include <WiFi.h>
+#include <WebServer.h>
+#include <Update.h>
 #include "wallpaper.h"
+
+// WiFi OTA Credentials (connects to Home Sender AP)
+const char* otaSSID = "GridWatcher-Home";
+const char* otaPass = "gridwatcher123";
+WebServer otaServer(80);
+
+const char* otaHTML = 
+"<!DOCTYPE html><html><head><title>GridWatcher Dashboard OTA</title>"
+"<style>body{font-family:sans-serif;background:#121212;color:#fff;text-align:center;padding-top:50px;}"
+"input[type=file]{margin:20px 0;padding:10px;background:#222;color:#fff;border:1px solid #444;border-radius:5px;}"
+"input[type=submit]{padding:10px 20px;background:#00e676;color:#000;border:none;font-weight:bold;border-radius:5px;cursor:pointer;}"
+"</style></head><body><h2>GridWatcher Dashboard Firmware OTA</h2>"
+"<form method='POST' action='/update' enctype='multipart/form-data'>"
+"<input type='file' name='update'><br><br>"
+"<input type='submit' value='Flash Dashboard Wireless'>"
+"</form></body></html>";
 
 // ---------- Pins ----------
 #define PIN_SCL   23
@@ -562,6 +581,42 @@ void setup() {
   tft.invertDisplay(false);
   tft.fillScreen(ST77XX_BLACK);
 
+  // Connect to GridWatcher-Home WiFi for Wireless OTA Updates
+  WiFi.mode(WIFI_STA);
+  WiFi.setAutoReconnect(true);
+  WiFi.begin(otaSSID, otaPass);
+  Serial.println("[WiFi] Connecting to GridWatcher-Home AP for Wireless OTA...");
+
+  otaServer.on("/update", HTTP_GET, []() {
+    otaServer.send(200, "text/html", otaHTML);
+  });
+  
+  otaServer.on("/update", HTTP_POST, []() {
+    otaServer.send(200, "text/plain", (Update.hasError()) ? "FAIL" : "OK");
+    delay(500);
+    ESP.restart();
+  }, []() {
+    HTTPUpload& upload = otaServer.upload();
+    if (upload.status == UPLOAD_FILE_START) {
+      Serial.printf("[OTA] Flashing dashboard: %s\n", upload.filename.c_str());
+      if (!Update.begin(UPDATE_SIZE_UNKNOWN)) {
+        Update.printError(Serial);
+      }
+    } else if (upload.status == UPLOAD_FILE_WRITE) {
+      if (Update.write(upload.buf, upload.currentSize) != upload.currentSize) {
+        Update.printError(Serial);
+      }
+    } else if (upload.status == UPLOAD_FILE_END) {
+      if (Update.end(true)) {
+        Serial.printf("[OTA] Success! Flashed %u bytes. Rebooting...\n", upload.totalSize);
+      } else {
+        Update.printError(Serial);
+      }
+    }
+  });
+
+  otaServer.begin();
+
   for (int i = 0; i < HIST_LEN; i++) vHist[i] = 0.0;
   for (int i = 0; i < AI_HIST_LEN; i++) { aiVoltHist[i] = 230.0; aiFreqHist[i] = 50.0; }
 
@@ -571,6 +626,7 @@ void setup() {
 }
 
 void loop() {
+  otaServer.handleClient();
   pollBootButton();
 
   if (receivedFlag) {
