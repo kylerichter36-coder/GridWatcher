@@ -60,13 +60,21 @@ const char* otaHTML =
 #define LORA_RST  1
 #define LORA_BUSY 5
 
+// LoRa radio config — MUST match exactly on sender and handheld
+#define LORA_FREQ   868.0
+#define LORA_BW     125.0
+#define LORA_SF     10      // Spreading Factor (7-12). Higher = longer range, slower
+#define LORA_CR     7       // Coding Rate (5-8)
+#define LORA_SYNC   0x12    // Sync word — private network
+#define LORA_PREAMBLE 8
+
 // Onboard LED for visual RX feedback
 #ifndef LED_BUILTIN
   #define LED_BUILTIN 8
 #endif
 #define LED_PIN    LED_BUILTIN
-#define LED_RX_MS  50     // Blip on good packet received
-#define LED_ERR_MS 200    // Longer pulse on RX error or watchdog re-arm
+#define LED_RX_MS  50
+#define LED_ERR_MS 200
 unsigned long ledOffMs = 0;
 
 Adafruit_ST7789 tft = Adafruit_ST7789(&SPI, PIN_CS, PIN_DC, PIN_RES);
@@ -607,16 +615,27 @@ void setup() {
   digitalWrite(LORA_RST, HIGH);
   delay(100); // Let SX1262 fully settle after reset
 
-  int state = radio.begin(868.0, 125.0, 10, 7, 0x12, 10, 8, 1.6, false);
+  int state = radio.begin(LORA_FREQ, LORA_BW, LORA_SF, LORA_CR,
+                          LORA_SYNC, 10, LORA_PREAMBLE, 1.6, false);
   if (state == RADIOLIB_ERR_NONE) {
     radio.setDio2AsRfSwitch(true);
     radio.setPacketReceivedAction(onPacketReceived);
-    delay(50); // Brief settle before arming receive
+    delay(50);
     radio.startReceive();
     lastRxArmTime = millis();
     Serial.println("[LoRa] Initialized and listening.");
+    Serial.println("============================================================");
+    Serial.printf("  HANDHELD RADIO CONFIG\n");
+    Serial.printf("  Freq:     %.1f MHz\n",   LORA_FREQ);
+    Serial.printf("  SF:       %d\n",          LORA_SF);
+    Serial.printf("  BW:       %.0f kHz\n",   LORA_BW);
+    Serial.printf("  CR:       4/%d\n",        LORA_CR);
+    Serial.printf("  SyncWord: 0x%02X\n",      LORA_SYNC);
+    Serial.printf("  Preamble: %d\n",          LORA_PREAMBLE);
+    Serial.println("  >>> SENDER MUST MATCH ALL VALUES ABOVE <<<");
+    Serial.println("============================================================");
   } else {
-    Serial.printf("[LoRa] Init failed, code: %d\n", state);
+    Serial.printf("[LoRa] Init FAILED, code: %d\n", state);
   }
 
   tft.init(76, 284);
@@ -667,25 +686,30 @@ void loop() {
 
   if (receivedFlag) {
     receivedFlag  = false;
-    lastRxArmTime = millis(); // Reset watchdog on each real packet flag
+    lastRxArmTime = millis();
 
-    // Use String for readData — safer for variable-length LoRa packets
+    // Read RSSI/SNR BEFORE readData — these are valid as soon as the IRQ fires
+    float irqRSSI = radio.getRSSI();
+    float irqSNR  = radio.getSNR();
+    Serial.printf("[LoRa] IRQ fired — RSSI: %.0fdBm  SNR: %.1fdB\n",
+                  irqRSSI, irqSNR);
+
     String str;
     int state = radio.readData(str);
 
-    // Restart receive IMMEDIATELY after reading — minimal RX gap
     radio.startReceive();
     lastRxArmTime = millis();
 
     if (state == RADIOLIB_ERR_NONE) {
       str.trim();
-      Serial.print("RX: "); Serial.println(str);
-      // Short blip — good packet
+      Serial.printf("[LoRa] readData OK  raw: \"%s\"\n", str.c_str());
       digitalWrite(LED_PIN, HIGH);
       ledOffMs = millis() + LED_RX_MS;
     } else {
-      // Print the error code so you can debug without guessing
-      Serial.printf("[LoRa] readData FAIL code: %d (CRC=-2, Header=-3, SF mismatch?)\n", state);
+      Serial.printf("[LoRa] readData FAIL code %d ", state);
+      if      (state == -2) Serial.println("(CRC error — likely SF/BW/sync mismatch with sender)");
+      else if (state == -3) Serial.println("(Header error — preamble detected but header corrupt)");
+      else                  Serial.printf ("(unknown error)\n");
     }
 
     if (state == RADIOLIB_ERR_NONE) {

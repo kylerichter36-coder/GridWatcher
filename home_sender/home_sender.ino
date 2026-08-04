@@ -26,9 +26,17 @@
 // [0] CONFIG FLAGS
 // ==============================================================================
 #define SERIAL_VERBOSE    true    // Set false to suppress per-packet TX log spam
-#define TX_INTERVAL_MS    2000   // 2s TX interval for legal 1% duty cycle compliance
-#define TX_POWER_DBM      14     // +14dBm — legal, excellent range at home distances
-#define CELL_STALE_MS     30000  // Mark cell signal as -999 after 30s of no update
+#define TX_INTERVAL_MS    2000
+#define TX_POWER_DBM      14
+#define CELL_STALE_MS     30000
+
+// LoRa radio config — MUST match exactly on sender and handheld
+#define LORA_FREQ     868.0
+#define LORA_BW       125.0
+#define LORA_SF       10
+#define LORA_CR       7
+#define LORA_SYNC     0x12
+#define LORA_PREAMBLE 8
 
 const char* otaHTML =
 "<!DOCTYPE html><html><head><title>GridWatcher OTA Update</title>"
@@ -118,7 +126,8 @@ void reinitRadio() {
   radio.reset();
   delay(10);
 
-  int state = radio.begin(868.0, 125.0, 10, 7, 0x12, TX_POWER_DBM, 8, 1.6, false);
+  int state = radio.begin(LORA_FREQ, LORA_BW, LORA_SF, LORA_CR,
+                          LORA_SYNC, TX_POWER_DBM, LORA_PREAMBLE, 1.6, false);
   if (state == RADIOLIB_ERR_NONE) {
     radio.setDio2AsRfSwitch(true);
     consecutiveTxFails = 0;
@@ -184,14 +193,27 @@ void setup() {
 
   SPI.begin(23, 21, 22);
 
-  Serial.printf("[SX1262] Init (868MHz, SF10, BW125, +%ddBm)...\n", TX_POWER_DBM);
-  int state = radio.begin(868.0, 125.0, 10, 7, 0x12, TX_POWER_DBM, 8, 1.6, false);
+  Serial.printf("[SX1262] Init (%.0fMHz, SF%d, BW%.0f, +%ddBm)...\n",
+                LORA_FREQ, LORA_SF, LORA_BW, TX_POWER_DBM);
+  int state = radio.begin(LORA_FREQ, LORA_BW, LORA_SF, LORA_CR,
+                          LORA_SYNC, TX_POWER_DBM, LORA_PREAMBLE, 1.6, false);
 
   if (state == RADIOLIB_ERR_NONE) {
     Serial.println("[SX1262] Success!");
     radio.setDio2AsRfSwitch(true);
     lastSuccessfulTx  = millis();
     lastReinitAttempt = millis();
+    Serial.println("============================================================");
+    Serial.printf("  SENDER RADIO CONFIG\n");
+    Serial.printf("  Freq:     %.1f MHz\n",  LORA_FREQ);
+    Serial.printf("  SF:       %d\n",         LORA_SF);
+    Serial.printf("  BW:       %.0f kHz\n",  LORA_BW);
+    Serial.printf("  CR:       4/%d\n",       LORA_CR);
+    Serial.printf("  SyncWord: 0x%02X\n",     LORA_SYNC);
+    Serial.printf("  Preamble: %d\n",         LORA_PREAMBLE);
+    Serial.printf("  TXPower:  +%d dBm\n",   TX_POWER_DBM);
+    Serial.println("  >>> HANDHELD MUST MATCH ALL VALUES ABOVE <<<");
+    Serial.println("============================================================");
   } else {
     Serial.printf("[SX1262] FAILED code: %d\n", state);
     while (true) { delay(1000); }
