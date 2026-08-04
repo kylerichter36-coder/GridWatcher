@@ -608,6 +608,13 @@ void setup() {
   pinMode(LED_PIN, OUTPUT);
   digitalWrite(LED_PIN, LOW);
 
+  // Initialize TFT BEFORE the radio so it doesn't mess with SPI settings
+  // or interrupt the radio's receive mode right after we start it.
+  tft.init(76, 284);
+  tft.setRotation(2);
+  tft.invertDisplay(false);
+  tft.fillScreen(ST77XX_BLACK);
+
   // Hard reset the radio before init — clears any stuck state from previous flash
   pinMode(LORA_RST, OUTPUT);
   digitalWrite(LORA_RST, LOW);
@@ -621,7 +628,10 @@ void setup() {
     radio.setDio2AsRfSwitch(true);
     radio.setPacketReceivedAction(onPacketReceived);
     delay(50);
-    radio.startReceive();
+    int startState = radio.startReceive();
+    if (startState != RADIOLIB_ERR_NONE) {
+      Serial.printf("[LoRa] startReceive FAILED during init, code: %d\n", startState);
+    }
     lastRxArmTime = millis();
     Serial.println("[LoRa] Initialized and listening.");
     Serial.println("============================================================");
@@ -637,11 +647,6 @@ void setup() {
   } else {
     Serial.printf("[LoRa] Init FAILED, code: %d\n", state);
   }
-
-  tft.init(76, 284);
-  tft.setRotation(2);
-  tft.invertDisplay(false);
-  tft.fillScreen(ST77XX_BLACK);
 
   // WiFi is OFF at boot — saves ~80mA constantly
   // To enable OTA: hold BOOT button for 3 seconds
@@ -676,8 +681,9 @@ void loop() {
   // RX Watchdog — if receivedFlag hasn't been set in RX_WATCHDOG_MS,
   // the radio may have gotten stuck. Force re-arm startReceive().
   if (millis() - lastRxArmTime > RX_WATCHDOG_MS && !receivedFlag) {
-    Serial.println("[LoRa] RX watchdog: re-arming startReceive()...");
-    radio.startReceive();
+    Serial.print("[LoRa] RX watchdog: re-arming startReceive()... ");
+    int startState = radio.startReceive();
+    Serial.printf("result: %d\n", startState);
     lastRxArmTime = millis();
     // Double-pulse so you can see self-heals without opening the terminal
     digitalWrite(LED_PIN, HIGH);
@@ -697,7 +703,10 @@ void loop() {
     String str;
     int state = radio.readData(str);
 
-    radio.startReceive();
+    int startState = radio.startReceive();
+    if (startState != RADIOLIB_ERR_NONE) {
+      Serial.printf("[LoRa] startReceive FAILED after read, code: %d\n", startState);
+    }
     lastRxArmTime = millis();
 
     if (state == RADIOLIB_ERR_NONE) {
@@ -820,7 +829,10 @@ void loop() {
       newDataFlag = false;
       drawFrame();
       // Safety re-arm: catches any DIO1 rising edge that occurred during the draw
-      radio.startReceive();
+      int startState = radio.startReceive();
+      if (startState != RADIOLIB_ERR_NONE) {
+        Serial.printf("[LoRa] startReceive FAILED after draw, code: %d\n", startState);
+      }
       lastRxArmTime = millis();
       // If the flag got set during the draw, process it immediately next loop
     }
