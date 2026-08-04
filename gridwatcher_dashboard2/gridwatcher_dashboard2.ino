@@ -60,6 +60,15 @@ const char* otaHTML =
 #define LORA_RST  1
 #define LORA_BUSY 5
 
+// Onboard LED for visual RX feedback
+#ifndef LED_BUILTIN
+  #define LED_BUILTIN 8
+#endif
+#define LED_PIN    LED_BUILTIN
+#define LED_RX_MS  50     // Blip on good packet received
+#define LED_ERR_MS 200    // Longer pulse on RX error or watchdog re-arm
+unsigned long ledOffMs = 0;
+
 Adafruit_ST7789 tft = Adafruit_ST7789(&SPI, PIN_CS, PIN_DC, PIN_RES);
 SX1262 radio = new Module(LORA_CS, LORA_DIO1, LORA_RST, LORA_BUSY);
 
@@ -589,6 +598,9 @@ void setup() {
 
   SPI.begin(23, 21, 22);
 
+  pinMode(LED_PIN, OUTPUT);
+  digitalWrite(LED_PIN, LOW);
+
   // Hard reset the radio before init — clears any stuck state from previous flash
   pinMode(LORA_RST, OUTPUT);
   digitalWrite(LORA_RST, LOW);
@@ -629,11 +641,19 @@ void setup() {
 // ==============================================================================
 // MAIN LOOP
 // ==============================================================================
-void loop() {
-  // Handle OTA server if active
-  if (otaModeActive) otaServer.handleClient();
 
+// Non-blocking LED tick
+inline void ledTick() {
+  if (ledOffMs > 0 && millis() >= ledOffMs) {
+    digitalWrite(LED_PIN, LOW);
+    ledOffMs = 0;
+  }
+}
+
+void loop() {
+  if (otaModeActive) otaServer.handleClient();
   pollBootButton();
+  ledTick();
 
   // RX Watchdog — if receivedFlag hasn't been set in RX_WATCHDOG_MS,
   // the radio may have gotten stuck. Force re-arm startReceive().
@@ -641,6 +661,9 @@ void loop() {
     Serial.println("[LoRa] RX watchdog: re-arming startReceive()...");
     radio.startReceive();
     lastRxArmTime = millis();
+    // Double-pulse so you can see self-heals without opening the terminal
+    digitalWrite(LED_PIN, HIGH);
+    ledOffMs = millis() + LED_ERR_MS;
   }
 
   if (receivedFlag) {
@@ -658,6 +681,9 @@ void loop() {
     if (state == RADIOLIB_ERR_NONE) {
       str.trim();
       Serial.print("RX: "); Serial.println(str);
+      // Short blip — good packet
+      digitalWrite(LED_PIN, HIGH);
+      ledOffMs = millis() + LED_RX_MS;
 
       int vIdx   = str.indexOf("V:");
       int fIdx   = str.indexOf(",F:");

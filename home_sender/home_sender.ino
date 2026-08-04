@@ -50,6 +50,16 @@ const char* otaHTML =
 #define LORA_BUSY 5
 #define PIN_BAT   0
 
+// Onboard LED for visual TX feedback (no terminal needed)
+// FireBeetle 2 ESP32-C6: try LED_BUILTIN first; change to your board's LED pin if needed
+#ifndef LED_BUILTIN
+  #define LED_BUILTIN 8
+#endif
+#define LED_PIN LED_BUILTIN
+#define LED_TX_MS   30    // Short blip on successful TX
+#define LED_ERR_MS  120   // Longer pulse on TX fail
+unsigned long ledOffMs = 0;  // millis() when LED should turn off (0 = already off)
+
 // ==============================================================================
 // [2] NETWORK CONFIGURATION
 // ==============================================================================
@@ -164,7 +174,10 @@ void handleStatus() {
 // ==============================================================================
 void setup() {
   Serial.begin(115200);
-  delay(500); // Was 2500ms — no reason to wait that long
+  delay(500);
+
+  pinMode(LED_PIN, OUTPUT);
+  digitalWrite(LED_PIN, LOW);
 
   Serial.println("\n[ESP32-C6] Booting GridWatcher Home Sender v3...");
   analogReadResolution(12);
@@ -232,9 +245,19 @@ void setup() {
 // ==============================================================================
 // [7] MAIN RUNTIME LOOP
 // ==============================================================================
+
+// Non-blocking LED tick — call every loop() iteration
+inline void ledTick() {
+  if (ledOffMs > 0 && millis() >= ledOffMs) {
+    digitalWrite(LED_PIN, LOW);
+    ledOffMs = 0;
+  }
+}
+
 void loop() {
   server.handleClient();
   yield();
+  ledTick(); // Non-blocking: turns LED off when its timer expires
 
   // Cell signal staleness check — expire stale data after CELL_STALE_MS
   if (lastCellUpdate > 0 && millis() - lastCellUpdate > CELL_STALE_MS) {
@@ -268,10 +291,16 @@ void loop() {
       if (SERIAL_VERBOSE) Serial.println("  -> OK");
       lastSuccessfulTx   = millis();
       consecutiveTxFails = 0;
-      reinitBackoffMs    = 10000; // Reset backoff on any success
+      reinitBackoffMs    = 10000;
+      // Short LED blip — TX success
+      digitalWrite(LED_PIN, HIGH);
+      ledOffMs = millis() + LED_TX_MS;
     } else {
       Serial.printf("TX FAIL (Code: %d)\n", state);
       consecutiveTxFails++;
+      // Longer LED pulse — TX error
+      digitalWrite(LED_PIN, HIGH);
+      ledOffMs = millis() + LED_ERR_MS;
     }
   }
 
