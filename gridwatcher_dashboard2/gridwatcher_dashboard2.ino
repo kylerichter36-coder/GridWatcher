@@ -23,9 +23,7 @@
 #include <Adafruit_ST7789.h>
 #include <RadioLib.h>
 #include <WiFi.h>
-#include <WebServer.h>
 #include <Update.h>
-#include <ESPmDNS.h>
 #include <HTTPClient.h>
 #include "wallpaper.h"
 
@@ -33,19 +31,7 @@
 const char* otaSSID = "GridWatcher-Home";  // sender AP
 const char* otaPass = "gridwatcher123";
 #define SENDER_HOST "http://192.168.4.1"
-WebServer otaServer(80);
 bool otaModeActive = false;
-
-const char* otaHTML =
-"<!DOCTYPE html><html><head><title>GridWatcher Dashboard OTA</title>"
-"<style>body{font-family:sans-serif;background:#121212;color:#fff;text-align:center;padding-top:50px;}"
-"input[type=file]{margin:20px 0;padding:10px;background:#222;color:#fff;border:1px solid #444;border-radius:5px;}"
-"input[type=submit]{padding:10px 20px;background:#00e676;color:#000;border:none;font-weight:bold;border-radius:5px;cursor:pointer;}"
-"</style></head><body><h2>GridWatcher Dashboard Firmware OTA</h2>"
-"<form method='POST' action='/update' enctype='multipart/form-data'>"
-"<input type='file' name='update'><br><br>"
-"<input type='submit' value='Flash Dashboard Wireless'>"
-"</form></body></html>";
 
 // ---------- Pins ----------
 #define PIN_SCL   23
@@ -743,7 +729,6 @@ inline void ledTick() {
 }
 
 void loop() {
-  if (otaModeActive) otaServer.handleClient();
   pollBootButton();
   ledTick();
 

@@ -476,6 +476,7 @@ void setup() {
   Serial.printf("[OTA] Dashboard: http://%s.local/ota\n", MDNS_HOSTNAME);
   Serial.printf("[INFO] TX interval: %dms | TX power: +%ddBm\n",
                 TX_INTERVAL_MS, TX_POWER_DBM);
+}
 
 // ==============================================================================
 // [7] MAIN RUNTIME LOOP
