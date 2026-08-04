@@ -625,13 +625,19 @@ void setup() {
   int state = radio.begin(LORA_FREQ, LORA_BW, LORA_SF, LORA_CR,
                           LORA_SYNC, 10, LORA_PREAMBLE, 1.6, false);
   if (state == RADIOLIB_ERR_NONE) {
-    radio.setDio2AsRfSwitch(true);
+    // setDio2AsRfSwitch(false) = no external RF switch controlled by DIO2
+    // Many SX1262 breakout modules have no external switch; enabling DIO2 RF control
+    // can block the RX path. Try false first — change to true only if TX also breaks.
+    radio.setDio2AsRfSwitch(false);
     radio.setPacketReceivedAction(onPacketReceived);
     delay(50);
     int startState = radio.startReceive();
     if (startState != RADIOLIB_ERR_NONE) {
       Serial.printf("[LoRa] startReceive FAILED during init, code: %d\n", startState);
     }
+    // Read DIO1 immediately — should be LOW (waiting for packet), never HIGH straight after arm
+    Serial.printf("[LoRa] DIO1 state after startReceive: %d (expect 0)\n",
+                  digitalRead(LORA_DIO1));
     lastRxArmTime = millis();
     Serial.println("[LoRa] Initialized and listening.");
     Serial.println("============================================================");
@@ -688,10 +694,12 @@ void loop() {
 
   // RX Watchdog — also re-attaches the interrupt on every re-arm as a recovery attempt
   if (millis() - lastRxArmTime > RX_WATCHDOG_MS && !receivedFlag) {
-    Serial.print("[LoRa] RX watchdog: re-arming + re-attaching interrupt... ");
-    radio.setPacketReceivedAction(onPacketReceived); // re-attach interrupt
+    Serial.printf("[LoRa] RX watchdog: DIO1=%d, re-arming... ",
+                  digitalRead(LORA_DIO1));
+    radio.setPacketReceivedAction(onPacketReceived);
     int startState = radio.startReceive();
-    Serial.printf("result: %d\n", startState);
+    Serial.printf("result: %d  DIO1 after: %d\n",
+                  startState, digitalRead(LORA_DIO1));
     lastRxArmTime = millis();
     digitalWrite(LED_PIN, HIGH);
     ledOffMs = millis() + LED_ERR_MS;
