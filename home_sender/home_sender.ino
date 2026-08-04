@@ -49,6 +49,11 @@ bool senderUpdatePending  = false;   // sender own firmware staged, waiting for 
 bool handheldConfirmed    = false;   // handheld reported OK
 bool bridgeConfirmed      = false;   // phone bridge reported OK
 
+// Simulated Grid State
+float lastVoltage         = 230.0;
+float lastFrequency       = 50.0;
+#define PIN_BOOT_BTN      9
+
 // Sender hub dashboard — upload firmware for all 3 devices from one page.
 // Laptop accesses this at http://gridwatcher-sender.local/ota (stays on home WiFi).
 const char HUB_HTML[] PROGMEM = R"rawliteral(
@@ -229,9 +234,12 @@ void handleSignal() {
       phoneBatteryPercent = server.arg("phone_battery").toInt();
     }
 
-    Serial.printf("[WiFi] Cell: %ddBm | Phone Batt: %d%%\n",
-                  cellSignalDbm, phoneBatteryPercent);
-    server.send(200, "text/plain", "OK");
+    Serial.printf("[WiFi] Cell: %ddBm | Phone Batt: %d%% | Grid: %.1fV\n",
+                  cellSignalDbm, phoneBatteryPercent, lastVoltage);
+                  
+    char resp[100];
+    snprintf(resp, sizeof(resp), "{\"voltage\":%.1f,\"frequency\":%.2f}", lastVoltage, lastFrequency);
+    server.send(200, "application/json", resp);
   } else {
     server.send(400, "text/plain", "missing value param");
   }
@@ -262,6 +270,7 @@ void setup() {
 
   pinMode(LED_PIN, OUTPUT);
   digitalWrite(LED_PIN, LOW);
+  pinMode(PIN_BOOT_BTN, INPUT_PULLUP);
 
   Serial.println("\n[ESP32-C6] Booting GridWatcher Home Sender v3...");
   analogReadResolution(12);
@@ -510,8 +519,17 @@ void loop() {
     readBattery();
 
     // Simulated AC readings (replace with real ZMPT101B sensor reads)
-    float simV = 230.0 + random(-15, 16) / 10.0;
-    float simF = 49.9  + random(0, 3) / 10.0;
+    float simV;
+    if (digitalRead(PIN_BOOT_BTN) == LOW) {
+      simV = 0.0;
+      Serial.println("[SIM] Outage simulated via BOOT button hold!");
+    } else {
+      simV = 230.0 + random(-15, 16) / 10.0;
+    }
+    float simF = (simV > 10.0) ? (49.9 + random(0, 3) / 10.0) : 0.0;
+
+    lastVoltage = simV;
+    lastFrequency = simF;
 
     snprintf(payload, sizeof(payload),
       "V:%.1f,F:%.2f,B:%d,S:%d,PB:%d,SEQ:%lu",

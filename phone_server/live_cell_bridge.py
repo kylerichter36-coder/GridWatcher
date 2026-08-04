@@ -295,8 +295,31 @@ def send_signal_to_esp32(dbm, phone_batt):
                     _stats["last_batt"]   = phone_batt
                     _stats["last_success"] = _ts()
                     _stats["fail_streak"] = 0
-                    _has_sent_outage_sms  = False  # Reset alert flag
-                    print(f"[{_ts()}] [Direct via {ip}] Cell {dbm}dBm | PhoneBatt {phone_batt}% -> ESP32 OK", flush=True)
+                    
+                    resp_data = response.read().decode()
+                    try:
+                        grid = json.loads(resp_data)
+                        voltage = grid.get("voltage", 230.0)
+                        frequency = grid.get("frequency", 50.0)
+                        print(f"[{_ts()}] [Direct via {ip}] Cell {dbm}dBm | PhoneBatt {phone_batt}% -> ESP32 OK (Grid: {voltage}V, {frequency}Hz)", flush=True)
+                        
+                        # Trigger SMS alert if simulated outage (voltage == 0) or actual drop
+                        if voltage < 200.0:
+                            if not _has_sent_outage_sms:
+                                _has_sent_outage_sms = True
+                                try:
+                                    msg = f"GridWatcher ALERT: Outage detected! Voltage is {voltage}V. Signal: {dbm}dBm."
+                                    subprocess.run(["termux-sms-send", "-n", SMS_TARGET_NUMBER, msg], timeout=5)
+                                    print(f"[{_ts()}] [SMS Alert] Outage alert SMS sent to {SMS_TARGET_NUMBER}", flush=True)
+                                except Exception as sms_err:
+                                    print(f"[{_ts()}] Failed to send SMS: {sms_err}", flush=True)
+                        else:
+                            # Reset SMS alert flag when voltage returns to normal
+                            _has_sent_outage_sms = False
+                    except Exception:
+                        print(f"[{_ts()}] [Direct via {ip}] Cell {dbm}dBm | PhoneBatt {phone_batt}% -> ESP32 OK", flush=True)
+                        _has_sent_outage_sms = False
+                        
                     log_telemetry_row()
                     return True
         except Exception:
