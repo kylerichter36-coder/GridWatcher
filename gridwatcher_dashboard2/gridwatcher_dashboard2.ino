@@ -608,7 +608,7 @@ void setup() {
   digitalWrite(LORA_RST, HIGH);
   delay(100); // Let SX1262 fully settle after reset
 
-  int state = radio.begin(868.0, 125.0, 9, 7, 0x12, 10, 8, 1.6, false);
+  int state = radio.begin(868.0, 125.0, 10, 7, 0x12, 10, 8, 1.6, false);
   if (state == RADIOLIB_ERR_NONE) {
     radio.setDio2AsRfSwitch(true);
     radio.setPacketReceivedAction(onPacketReceived);

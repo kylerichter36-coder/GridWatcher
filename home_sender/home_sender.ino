@@ -118,7 +118,7 @@ void reinitRadio() {
   radio.reset();
   delay(10);
 
-  int state = radio.begin(868.0, 125.0, 9, 7, 0x12, TX_POWER_DBM, 8, 1.6, false);
+  int state = radio.begin(868.0, 125.0, 10, 7, 0x12, TX_POWER_DBM, 8, 1.6, false);
   if (state == RADIOLIB_ERR_NONE) {
     radio.setDio2AsRfSwitch(true);
     consecutiveTxFails = 0;
@@ -184,8 +184,8 @@ void setup() {
 
   SPI.begin(23, 21, 22);
 
-  Serial.printf("[SX1262] Init (868MHz, SF9, BW125, +%ddBm)...\n", TX_POWER_DBM);
-  int state = radio.begin(868.0, 125.0, 9, 7, 0x12, TX_POWER_DBM, 8, 1.6, false);
+  Serial.printf("[SX1262] Init (868MHz, SF10, BW125, +%ddBm)...\n", TX_POWER_DBM);
+  int state = radio.begin(868.0, 125.0, 10, 7, 0x12, TX_POWER_DBM, 8, 1.6, false);
 
   if (state == RADIOLIB_ERR_NONE) {
     Serial.println("[SX1262] Success!");
