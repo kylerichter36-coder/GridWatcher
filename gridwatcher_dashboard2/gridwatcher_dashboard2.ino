@@ -146,6 +146,10 @@ float rxRate                        = 0.0;
 long totalLostPackets               = 0;
 long totalExpectedPackets           = 0;
 
+// RX Watchdog — if no packet (or no flag set) for this long, force re-arm
+#define RX_WATCHDOG_MS 15000
+unsigned long lastRxArmTime = 0;
+
 // ---------- Interrupt-driven receive flag ----------
 volatile bool receivedFlag = false;
 
@@ -557,8 +561,13 @@ void drawFrame() {
     canvas.print("OTA ON");
   }
 
+  // Disable LoRa DIO1 interrupt during TFT SPI push to prevent bus corruption.
+  // Both TFT and LoRa share the same hardware SPI bus — concurrent access corrupts both.
+  detachInterrupt(digitalPinToInterrupt(LORA_DIO1));
   tft.drawRGBBitmap(0, 0, canvas.getBuffer(), SCR_W, SCR_H);
+  attachInterrupt(digitalPinToInterrupt(LORA_DIO1), onPacketReceived, RISING);
 }
+
 
 // ==============================================================================
 // SETUP
@@ -575,11 +584,20 @@ void setup() {
 
   SPI.begin(23, 21, 22);
 
+  // Hard reset the radio before init — clears any stuck state from previous flash
+  pinMode(LORA_RST, OUTPUT);
+  digitalWrite(LORA_RST, LOW);
+  delay(20);
+  digitalWrite(LORA_RST, HIGH);
+  delay(100); // Let SX1262 fully settle after reset
+
   int state = radio.begin(868.0, 125.0, 9, 7, 0x12, 10, 8, 1.6, false);
   if (state == RADIOLIB_ERR_NONE) {
     radio.setDio2AsRfSwitch(true);
     radio.setPacketReceivedAction(onPacketReceived);
+    delay(50); // Brief settle before arming receive
     radio.startReceive();
+    lastRxArmTime = millis();
     Serial.println("[LoRa] Initialized and listening.");
   } else {
     Serial.printf("[LoRa] Init failed, code: %d\n", state);
@@ -612,18 +630,27 @@ void loop() {
 
   pollBootButton();
 
-  if (receivedFlag) {
-    receivedFlag = false;
+  // RX Watchdog — if receivedFlag hasn't been set in RX_WATCHDOG_MS,
+  // the radio may have gotten stuck. Force re-arm startReceive().
+  if (millis() - lastRxArmTime > RX_WATCHDOG_MS && !receivedFlag) {
+    Serial.println("[LoRa] RX watchdog: re-arming startReceive()...");
+    radio.startReceive();
+    lastRxArmTime = millis();
+  }
 
-    // Use char buffer instead of String — zero heap allocation
-    char rxBuf[128] = {0};
-    int state = radio.readData((uint8_t*)rxBuf, sizeof(rxBuf) - 1);
+  if (receivedFlag) {
+    receivedFlag  = false;
+    lastRxArmTime = millis(); // Reset watchdog on each real packet flag
+
+    // Use String for readData — safer for variable-length LoRa packets
+    String str;
+    int state = radio.readData(str);
 
     // Restart receive IMMEDIATELY after reading — minimal RX gap
     radio.startReceive();
+    lastRxArmTime = millis();
 
     if (state == RADIOLIB_ERR_NONE) {
-      String str = String(rxBuf);
       str.trim();
       Serial.print("RX: "); Serial.println(str);
 
