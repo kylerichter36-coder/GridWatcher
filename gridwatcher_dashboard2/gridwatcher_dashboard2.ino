@@ -575,11 +575,10 @@ void drawFrame() {
     canvas.print("OTA ON");
   }
 
-  // Use RadioLib's own API to pause/resume the interrupt — safer than raw detach/attach
-  // which bypasses RadioLib's internal state tracking and causes missed packets.
-  radio.clearPacketReceivedAction();
+  // No interrupt guard needed here — the 50ms DRAW_DELAY_MS ensures the radio
+  // has been in idle RX for at least 50ms before we touch the SPI bus.
+  // SF10 airtime = 410ms, TX interval = 2s, so the bus is always free at draw time.
   tft.drawRGBBitmap(0, 0, canvas.getBuffer(), SCR_W, SCR_H);
-  radio.setPacketReceivedAction(onPacketReceived);
 }
 
 
@@ -684,6 +683,12 @@ void loop() {
       // Short blip — good packet
       digitalWrite(LED_PIN, HIGH);
       ledOffMs = millis() + LED_RX_MS;
+    } else {
+      // Print the error code so you can debug without guessing
+      Serial.printf("[LoRa] readData FAIL code: %d (CRC=-2, Header=-3, SF mismatch?)\n", state);
+    }
+
+    if (state == RADIOLIB_ERR_NONE) {
 
       int vIdx   = str.indexOf("V:");
       int fIdx   = str.indexOf(",F:");
@@ -740,8 +745,8 @@ void loop() {
         newDataFlag   = true;
         dataReceivedMs = millis();
       }
-    }
-  }
+    } // end state == RADIOLIB_ERR_NONE (parse block)
+  } // end receivedFlag
 
   // Auto-sleep
   if (screenAwake && (millis() - lastActivity > SLEEP_MS)) {
@@ -782,10 +787,18 @@ void loop() {
   }
 
   // ---- Data-triggered display: draw exactly 50ms after new data arrives ----
-  // This gives the radio time to return to RX mode before we take the SPI bus.
+  // The 50ms gap guarantees the SX1262 is idle in RX before we take the SPI bus.
+  // SF10 airtime ~410ms + 2s TX interval = next packet can't arrive for ~1.6s after draw.
   if (newDataFlag && screenAwake &&
       (millis() - dataReceivedMs >= DRAW_DELAY_MS)) {
-    newDataFlag = false;
-    drawFrame();
+    // Don't draw if another packet just arrived — process it first next iteration
+    if (!receivedFlag) {
+      newDataFlag = false;
+      drawFrame();
+      // Safety re-arm: catches any DIO1 rising edge that occurred during the draw
+      radio.startReceive();
+      lastRxArmTime = millis();
+      // If the flag got set during the draw, process it immediately next loop
+    }
   }
 }
