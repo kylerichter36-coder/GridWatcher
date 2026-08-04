@@ -185,44 +185,49 @@ IRAM_ATTR void onPacketReceived(void) {
 }
 
 // ==============================================================================
-// OTA mode: connect to sender AP, pull firmware from sender hub
-void startOTAMode() {
-  if (otaModeActive) return;
-  otaModeActive = true;
-
-  Serial.println("[OTA] Long press detected — connecting to sender AP...");
+// Shared helper to check for updates from the sender hub.
+// If bootCheck is true, it fails silently and quickly (3s timeout) so normal boot is fast.
+// If bootCheck is false, it prints errors on screen and waits up to 10s to connect.
+bool checkForUpdates(bool bootCheck) {
+  unsigned long timeout = bootCheck ? 3000 : 10000;
+  Serial.println(bootCheck ? "[OTA] Boot update check starting..." : "[OTA] Manual update check starting...");
 
   // Show connecting screen
   canvas.fillScreen(0x0000);
   canvas.setTextColor(0xFFFF);
   canvas.setTextSize(1);
   canvas.setCursor(2, 50);
-  canvas.print("OTA MODE");
+  canvas.print("OTA CHECK");
   canvas.setCursor(2, 66);
   canvas.setTextColor(0x4D3F);
-  canvas.print("Connecting...");
+  canvas.print(bootCheck ? "Auto-checking..." : "Connecting...");
   tft.drawRGBBitmap(0, 0, canvas.getBuffer(), SCR_W, SCR_H);
   digitalWrite(PIN_BLK, HIGH);
 
   WiFi.mode(WIFI_STA);
   WiFi.begin(otaSSID, otaPass);
   unsigned long start = millis();
-  while (WiFi.status() != WL_CONNECTED && millis() - start < 10000) delay(200);
+  while (WiFi.status() != WL_CONNECTED && millis() - start < timeout) delay(100);
 
   if (WiFi.status() != WL_CONNECTED) {
-    canvas.fillScreen(0x0000);
-    canvas.setTextColor(0xF800);
-    canvas.setCursor(2, 60); canvas.print("SENDER AP");
-    canvas.setCursor(2, 74); canvas.print("NOT FOUND");
-    canvas.setCursor(2, 95); canvas.setTextColor(0x738E);
-    canvas.print("Is sender on?");
-    tft.drawRGBBitmap(0, 0, canvas.getBuffer(), SCR_W, SCR_H);
+    WiFi.disconnect();
+    WiFi.mode(WIFI_OFF);
+    if (!bootCheck) {
+      canvas.fillScreen(0x0000);
+      canvas.setTextColor(0xF800);
+      canvas.setCursor(2, 60); canvas.print("SENDER AP");
+      canvas.setCursor(2, 74); canvas.print("NOT FOUND");
+      canvas.setCursor(2, 95); canvas.setTextColor(0x738E);
+      canvas.print("Is sender on?");
+      tft.drawRGBBitmap(0, 0, canvas.getBuffer(), SCR_W, SCR_H);
+      delay(2000);
+    }
     Serial.println("[OTA] Could not connect to sender AP");
-    return;
+    return false;
   }
   Serial.printf("[OTA] Connected to sender AP -> %s\n", WiFi.localIP().toString().c_str());
 
-  // Check if an update is available
+  // Check if update is available
   HTTPClient http;
   http.begin(String(SENDER_HOST) + "/handheld-update-available");
   int code = http.GET();
@@ -230,18 +235,23 @@ void startOTAMode() {
   http.end();
 
   if (available != "yes") {
-    canvas.fillScreen(0x0000);
-    canvas.setTextColor(0x07E0);
-    canvas.setCursor(2, 55); canvas.print("UP TO DATE");
-    canvas.setCursor(2, 72); canvas.setTextColor(0x738E);
-    canvas.print("No update on");
-    canvas.setCursor(2, 85); canvas.print("sender hub");
-    tft.drawRGBBitmap(0, 0, canvas.getBuffer(), SCR_W, SCR_H);
+    WiFi.disconnect();
+    WiFi.mode(WIFI_OFF);
+    if (!bootCheck) {
+      canvas.fillScreen(0x0000);
+      canvas.setTextColor(0x07E0);
+      canvas.setCursor(2, 55); canvas.print("UP TO DATE");
+      canvas.setCursor(2, 72); canvas.setTextColor(0x738E);
+      canvas.print("No update on");
+      canvas.setCursor(2, 85); canvas.print("sender hub");
+      tft.drawRGBBitmap(0, 0, canvas.getBuffer(), SCR_W, SCR_H);
+      delay(1500);
+    }
     Serial.println("[OTA] No update available on sender");
-    return;
+    return false;
   }
 
-  // Update available — stream firmware from sender
+  // Update available — stream from sender
   Serial.println("[OTA] Update available! Downloading from sender...");
   canvas.fillScreen(0x0000);
   canvas.setTextColor(0xFFFF);
@@ -287,12 +297,25 @@ void startOTAMode() {
   }
   dlHttp.end();
 
+  WiFi.disconnect();
+  WiFi.mode(WIFI_OFF);
+
   canvas.fillScreen(0x0000);
   canvas.setTextColor(0xF800);
   canvas.setCursor(2, 60); canvas.print("OTA FAIL");
   canvas.setCursor(2, 75); canvas.setTextColor(0x738E);
   canvas.print("Check serial");
   tft.drawRGBBitmap(0, 0, canvas.getBuffer(), SCR_W, SCR_H);
+  delay(2000);
+  return false;
+}
+
+// OTA mode: connect to sender AP, pull firmware from sender hub manually
+void startOTAMode() {
+  if (otaModeActive) return;
+  otaModeActive = true;
+  checkForUpdates(false); // manual check
+  otaModeActive = false;
 }
 
 // ==============================================================================
@@ -646,12 +669,14 @@ void setup() {
   pinMode(LED_PIN, OUTPUT);
   digitalWrite(LED_PIN, LOW);
 
-  // Initialize TFT BEFORE the radio so it doesn't mess with SPI settings
-  // or interrupt the radio's receive mode right after we start it.
   tft.init(76, 284);
   tft.setRotation(2);
   tft.invertDisplay(false);
   tft.fillScreen(ST77XX_BLACK);
+
+  // Check for auto-update on boot.
+  // Silently exits in 3s if sender AP not found, preserving fast boot.
+  checkForUpdates(true);
 
   // Hard reset the radio before init — clears any stuck state from previous flash
   pinMode(LORA_RST, OUTPUT);
