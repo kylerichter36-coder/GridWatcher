@@ -132,12 +132,17 @@ float aiVoltHist[AI_HIST_LEN];
 float aiFreqHist[AI_HIST_LEN];
 int aiHistIdx = 0;
 
-// Update timers & stats
+// Stats ticker — runs every 1s independent of display
 unsigned long lastUpdate = 0;
 const unsigned long UPDATE_MS = 1000;
 bool btnLastRaw = HIGH;
 unsigned long btnLastChange = 0;
 const unsigned long DEBOUNCE_MS = 40;
+
+// Data-triggered display — draw 50ms AFTER new data arrives, not on a fixed clock
+volatile bool newDataFlag = false;
+unsigned long dataReceivedMs = 0;
+#define DRAW_DELAY_MS 50
 
 // LoRa tracking stats
 unsigned long lastExpectedSeq       = 0;
@@ -561,11 +566,11 @@ void drawFrame() {
     canvas.print("OTA ON");
   }
 
-  // Disable LoRa DIO1 interrupt during TFT SPI push to prevent bus corruption.
-  // Both TFT and LoRa share the same hardware SPI bus — concurrent access corrupts both.
-  detachInterrupt(digitalPinToInterrupt(LORA_DIO1));
+  // Use RadioLib's own API to pause/resume the interrupt — safer than raw detach/attach
+  // which bypasses RadioLib's internal state tracking and causes missed packets.
+  radio.clearPacketReceivedAction();
   tft.drawRGBBitmap(0, 0, canvas.getBuffer(), SCR_W, SCR_H);
-  attachInterrupt(digitalPinToInterrupt(LORA_DIO1), onPacketReceived, RISING);
+  radio.setPacketReceivedAction(onPacketReceived);
 }
 
 
@@ -695,7 +700,6 @@ void loop() {
         rssi_dBm = (int)radio.getRSSI();
         snr_dB   = radio.getSNR();
 
-        // FIXED: Weighted RSSI (60%) + SNR (40%) for accurate link quality
         int rssiScore = constrain(map(rssi_dBm, -130, -60, 0, 100), 0, 100);
         int snrScore  = constrain(map((int)snr_dB, -20, 10, 0, 100), 0, 100);
         linkQual = (rssiScore * 60 + snrScore * 40) / 100;
@@ -705,6 +709,10 @@ void loop() {
         aiVoltHist[aiHistIdx] = voltage;
         aiFreqHist[aiHistIdx] = freq_Hz;
         aiHistIdx = (aiHistIdx + 1) % AI_HIST_LEN;
+
+        // Signal that fresh data is ready — display will draw after DRAW_DELAY_MS
+        newDataFlag   = true;
+        dataReceivedMs = millis();
       }
     }
   }
@@ -715,6 +723,7 @@ void loop() {
     digitalWrite(PIN_BLK, LOW);
   }
 
+  // ---- 1s Stats Ticker (runs independently of display) ----
   if (millis() - lastUpdate >= UPDATE_MS) {
     lastUpdate = millis();
 
@@ -723,10 +732,8 @@ void loop() {
 
     bool wasAlive = linkAlive;
     linkAlive = (lastPacketMillis != 0) && (millis() - lastPacketMillis < LINK_TIMEOUT_MS);
-
     if (!linkAlive) linkQual = 0;
 
-    // FIXED: Reset packet loss counters on reconnect — no more permanent high loss %
     if (!wasAlive && linkAlive) {
       totalLostPackets     = 0;
       totalExpectedPackets = 0;
@@ -735,15 +742,24 @@ void loop() {
       Serial.println("[LoRa] Link reconnected — loss counters reset.");
     }
 
-    // Wake screen on link state change
+    // Wake + force redraw on link state change (OFFLINE / LIVE flip)
     if (wasAlive != linkAlive) {
-      screenAwake  = true;
-      lastActivity = millis();
+      screenAwake    = true;
+      lastActivity   = millis();
+      newDataFlag    = true;
+      dataReceivedMs = millis();
       digitalWrite(PIN_BLK, HIGH);
     }
 
     updateAIRisk();
-    readBattery(); // Returns immediately if called within BATT_READ_MS
-    if (screenAwake) drawFrame();
+    readBattery();
+  }
+
+  // ---- Data-triggered display: draw exactly 50ms after new data arrives ----
+  // This gives the radio time to return to RX mode before we take the SPI bus.
+  if (newDataFlag && screenAwake &&
+      (millis() - dataReceivedMs >= DRAW_DELAY_MS)) {
+    newDataFlag = false;
+    drawFrame();
   }
 }
