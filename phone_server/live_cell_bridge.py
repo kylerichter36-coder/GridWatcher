@@ -128,13 +128,28 @@ def get_live_rsrp():
             res = subprocess.run(["termux-telephony-cellinfo"], capture_output=True, text=True, timeout=5)
             if res.returncode == 0 and res.stdout:
                 cells = json.loads(res.stdout)
+                
+                # First pass: try to find the registered cell tower
                 for cell in cells:
-                    if cell.get("registered", False):
+                    reg = cell.get("registered")
+                    is_registered = (reg is True or reg == "true" or reg == 1 or reg == "YES")
+                    
+                    if is_registered:
                         sig = cell.get("cell_signal_strength", {})
-                        if "rsrp" in sig:
-                            return sig["rsrp"]
-                        elif "dbm" in sig:
-                            return sig["dbm"]
+                        for key, val in sig.items():
+                            k_lower = key.lower()
+                            if ("rsrp" in k_lower or "dbm" in k_lower or "rssi" in k_lower) and isinstance(val, (int, float)):
+                                if val < 0 and val > -140:
+                                    return int(val)
+                                    
+                # Second pass: fallback to any cell tower with a valid signal strength
+                for cell in cells:
+                    sig = cell.get("cell_signal_strength", {})
+                    for key, val in sig.items():
+                        k_lower = key.lower()
+                        if ("rsrp" in k_lower or "dbm" in k_lower or "rssi" in k_lower) and isinstance(val, (int, float)):
+                            if val < 0 and val > -140:
+                                return int(val)
         except Exception as e:
             print(f"[{_ts()}] Termux cellinfo error: {e}")
         return -999
