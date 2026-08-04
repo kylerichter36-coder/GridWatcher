@@ -393,7 +393,9 @@ td{{padding:4px 12px;}} .good{{color:#0f0;}} .warn{{color:#ff0;}} .bad{{color:#f
 # MAIN — with auto-reconnect outer loop
 # ==============================================================================
 def main():
-    global _last_sdca    # Find update host dynamically
+    global _last_sdcard_push, _shutdown
+    
+    # Find update host dynamically
     update_host = "192.168.4.1"
     try:
         resolved = socket.gethostbyname("gridwatcher-sender.local")
