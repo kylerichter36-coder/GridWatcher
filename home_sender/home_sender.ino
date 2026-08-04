@@ -16,11 +16,14 @@
   V:<voltage>,F:<freq>,B:<base_batt>,S:<cell_dbm>,PB:<phone_batt>,SEQ:<seq>
 */
 
+#include <Arduino.h>
 #include <SPI.h>
-#include <RadioLib.h>
 #include <WiFi.h>
 #include <WebServer.h>
 #include <Update.h>
+#include <ESPmDNS.h>
+#include <LittleFS.h>
+#include <RadioLib.h>
 
 // ==============================================================================
 // [0] CONFIG FLAGS
@@ -39,16 +42,76 @@
 #define LORA_SYNC     0x12
 #define LORA_PREAMBLE 8
 
-const char* otaHTML =
-"<!DOCTYPE html><html><head><title>GridWatcher OTA Update</title>"
-"<style>body{font-family:sans-serif;background:#121212;color:#fff;text-align:center;padding-top:50px;}"
-"input[type=file]{margin:20px 0;padding:10px;background:#222;color:#fff;border:1px solid #444;border-radius:5px;}"
-"input[type=submit]{padding:10px 20px;background:#00e676;color:#000;border:none;font-weight:bold;border-radius:5px;cursor:pointer;}"
-"</style></head><body><h2>GridWatcher Sender OTA</h2>"
-"<form method='POST' action='/update' enctype='multipart/form-data'>"
-"<input type='file' name='update'><br><br>"
-"<input type='submit' value='Flash Firmware Wireless'>"
-"</form></body></html>";
+// OTA Hub state — tracks which devices still need to update
+bool handheldUpdateReady  = false;   // handheld.bin uploaded and waiting
+bool bridgeUpdateReady    = false;   // bridge.py uploaded and waiting
+bool senderUpdatePending  = false;   // sender own firmware staged, waiting for others
+bool handheldConfirmed    = false;   // handheld reported OK
+bool bridgeConfirmed      = false;   // phone bridge reported OK
+
+// Sender hub dashboard — upload firmware for all 3 devices from one page.
+// Laptop accesses this at http://gridwatcher-sender.local/ota (stays on home WiFi).
+const char HUB_HTML[] PROGMEM = R"rawliteral(
+<!DOCTYPE html><html><head><meta charset='UTF-8'>
+<title>GridWatcher OTA Hub</title>
+<meta http-equiv='refresh' content='5'>
+<style>
+body{font-family:sans-serif;background:#0d1117;color:#e6edf3;margin:0;padding:20px;}
+h1{color:#58a6ff;border-bottom:1px solid #30363d;padding-bottom:10px;}
+.card{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:16px;margin:12px 0;}
+.card h3{margin-top:0;color:#79c0ff;}
+.status{display:inline-block;padding:3px 10px;border-radius:12px;font-size:0.85em;font-weight:bold;}
+.ok{background:#1a4731;color:#3fb950;}
+.wait{background:#3d2b00;color:#e3b341;}
+.ready{background:#1f3d6e;color:#58a6ff;}
+input[type=file]{background:#21262d;color:#e6edf3;border:1px solid #30363d;padding:6px;border-radius:4px;width:100%;margin:8px 0;}
+btn,input[type=submit]{padding:8px 16px;background:#238636;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:bold;margin-top:6px;}
+btn:hover,input[type=submit]:hover{background:#2ea043;}
+.info{color:#8b949e;font-size:0.85em;margin-top:4px;}
+table{width:100%;border-collapse:collapse;}
+td,th{padding:8px 12px;border:1px solid #30363d;text-align:left;}
+th{background:#21262d;color:#79c0ff;}
+</style></head><body>
+<h1>GridWatcher OTA Hub</h1>
+<div class='card'>
+<h3>Device Status</h3>
+<table><tr><th>Device</th><th>Update Ready</th><th>Confirmed</th></tr>
+<tr><td>Handheld</td>
+    <td><span class='status %HREADY%'>%HREADYTXT%</span></td>
+    <td><span class='status %HCONF%'>%HCONFTXT%</span></td></tr>
+<tr><td>Phone Bridge</td>
+    <td><span class='status %BREADY%'>%BREADYTXT%</span></td>
+    <td><span class='status %BCONF%'>%BCONFTXT%</span></td></tr>
+<tr><td>Sender (self)</td>
+    <td><span class='status %SREADY%'>%SREADYTXT%</span></td>
+    <td><span class='status ok'>%SCONFTXT%</span></td></tr>
+</table>
+</div>
+<div class='card'>
+<h3>1. Upload Handheld Firmware</h3>
+<p class='info'>handheld will pull this automatically when you hold BOOT for 3s</p>
+<form method='POST' action='/upload-handheld' enctype='multipart/form-data'>
+<input type='file' name='file' accept='.bin'>
+<input type='submit' value='Upload Handheld Firmware'>
+</form>
+</div>
+<div class='card'>
+<h3>2. Upload Bridge Script</h3>
+<p class='info'>phone bridge checks for this on every startup</p>
+<form method='POST' action='/upload-bridge' enctype='multipart/form-data'>
+<input type='file' name='file' accept='.py'>
+<input type='submit' value='Upload Bridge Script'>
+</form>
+</div>
+<div class='card'>
+<h3>3. Upload Sender Firmware (applied last)</h3>
+<p class='info'>sender stages this and reboots automatically after handheld + phone confirm</p>
+<form method='POST' action='/update' enctype='multipart/form-data'>
+<input type='file' name='update' accept='.bin'>
+<input type='submit' value='Stage Sender Firmware'>
+</form>
+</div>
+</body></html>)rawliteral";
 
 // ==============================================================================
 // [1] HARDWARE & PIN DEFINITIONS
@@ -72,10 +135,21 @@ unsigned long ledOffMs = 0;  // millis() when LED should turn off (0 = already o
 // ==============================================================================
 // [2] NETWORK CONFIGURATION
 // ==============================================================================
-const char* homeSSID = "YOUR_HOME_WIFI_NAME";
-const char* homePass = "YOUR_HOME_WIFI_PASSWORD";
+// ---- Home WiFi (primary) ----
+const char* homeSSID = "YOUR_HOME_WIFI_NAME";      // <-- fill in
+const char* homePass = "YOUR_HOME_WIFI_PASSWORD";  // <-- fill in
+
+// ---- Phone hotspot (fallback when away from home) ----
+const char* phoneSSID = "YOUR_PHONE_HOTSPOT_NAME";     // <-- fill in
+const char* phonePass = "YOUR_PHONE_HOTSPOT_PASSWORD"; // <-- fill in
+
+// ---- Sender AP (always on, for local debugging) ----
 const char* apSSID   = "GridWatcher-Home";
 const char* apPass   = "gridwatcher123";
+
+// mDNS hostname — access OTA at http://gridwatcher-sender.local/update from any
+// device on the same network. No WiFi switching needed on laptop.
+#define MDNS_HOSTNAME "gridwatcher-sender"
 
 WebServer server(80);
 
@@ -220,50 +294,188 @@ void setup() {
     while (true) { delay(1000); }
   }
 
-  // WiFi: AP is critical, STA is optional
+  // Start LittleFS for storing handheld firmware and bridge script on sender's flash
+  // Arduino IDE: Tools -> Partition Scheme -> "Default 4MB with spiffs" (or Minimal SPIFFS)
+  if (!LittleFS.begin(true)) {
+    Serial.println("[LittleFS] Mount FAILED — check partition scheme in Arduino IDE!");
+  } else {
+    Serial.println("[LittleFS] Mounted OK");
+  }
+
+  // WiFi: AP always on + STA tries home WiFi first, phone hotspot as fallback
   WiFi.mode(WIFI_AP_STA);
   WiFi.softAP(apSSID, apPass);
   Serial.printf("[WiFi] AP '%s' -> %s\n", apSSID, WiFi.softAPIP().toString().c_str());
 
-  // Disable aggressive STA auto-reconnect — prevents WiFi scans disrupting SPI
   WiFi.setAutoReconnect(false);
-  WiFi.begin(homeSSID, homePass);
-  Serial.println("[WiFi] STA connecting (auto-reconnect disabled to protect LoRa)...");
+
+  // Try home WiFi first (10s), then phone hotspot (10s), then AP-only
+  const char* networks[][2] = {{homeSSID, homePass}, {phoneSSID, phonePass}};
+  const char* networkNames[] = {"Home WiFi", "Phone Hotspot"};
+  bool connected = false;
+  for (int n = 0; n < 2 && !connected; n++) {
+    Serial.printf("[WiFi] Trying %s ('%s')...\n", networkNames[n], networks[n][0]);
+    WiFi.begin(networks[n][0], networks[n][1]);
+    unsigned long t = millis();
+    while (WiFi.status() != WL_CONNECTED && millis() - t < 10000) delay(200);
+    if (WiFi.status() == WL_CONNECTED) {
+      Serial.printf("[WiFi] Connected via %s -> %s\n",
+                    networkNames[n], WiFi.localIP().toString().c_str());
+      connected = true;
+    } else {
+      WiFi.disconnect();
+      delay(500);
+    }
+  }
+  if (!connected) Serial.println("[WiFi] No STA network found — AP-only mode.");
+
+  // Start mDNS — laptop accesses OTA hub at http://gridwatcher-sender.local/ota
+  if (WiFi.status() == WL_CONNECTED) {
+    if (MDNS.begin(MDNS_HOSTNAME)) {
+      MDNS.addService("http", "tcp", 80);
+      Serial.printf("[mDNS] OTA hub: http://%s.local/ota\n", MDNS_HOSTNAME);
+    }
+  }
 
   server.on("/signal", HTTP_POST, handleSignal);
-  server.on("/status", HTTP_GET,  handleStatus);
+  server.on("/status",  HTTP_GET,  handleStatus);
 
-  // Wireless OTA Endpoints
-  server.on("/update", HTTP_GET, []() {
-    server.send(200, "text/html", otaHTML);
+  // ---- OTA Hub: serve dashboard ----
+  server.on("/ota", HTTP_GET, []() {
+    String page = String(HUB_HTML);
+    // Handheld status
+    page.replace("%HREADY%",    handheldUpdateReady ? "ready" : "wait");
+    page.replace("%HREADYTXT%", handheldUpdateReady ? "READY" : "none");
+    page.replace("%HCONF%",     handheldConfirmed   ? "ok"    : "wait");
+    page.replace("%HCONFTXT%", handheldConfirmed   ? "OK"    : "pending");
+    // Bridge status
+    page.replace("%BREADY%",    bridgeUpdateReady ? "ready" : "wait");
+    page.replace("%BREADYTXT%", bridgeUpdateReady ? "READY" : "none");
+    page.replace("%BCONF%",     bridgeConfirmed   ? "ok"    : "wait");
+    page.replace("%BCONFTXT%", bridgeConfirmed   ? "OK"    : "pending");
+    // Sender status
+    page.replace("%SREADY%",    senderUpdatePending ? "ready" : "wait");
+    page.replace("%SREADYTXT%", senderUpdatePending ? "STAGED" : "none");
+    page.replace("%SCONFTXT%", (handheldConfirmed && bridgeConfirmed) ? "rebooting..." : "waiting");
+    server.send(200, "text/html", page);
   });
 
+  // ---- OTA Hub: receive and store handheld firmware ----
+  server.on("/upload-handheld", HTTP_POST, []() {
+    server.send(200, "text/plain", handheldUpdateReady ? "OK — handheld.bin stored" : "FAIL");
+  }, []() {
+    HTTPUpload& up = server.upload();
+    static File f;
+    if (up.status == UPLOAD_FILE_START) {
+      Serial.printf("[HUB] Storing handheld firmware: %s\n", up.filename.c_str());
+      f = LittleFS.open("/handheld.bin", "w");
+    } else if (up.status == UPLOAD_FILE_WRITE && f) {
+      f.write(up.buf, up.currentSize);
+    } else if (up.status == UPLOAD_FILE_END) {
+      if (f) { f.close(); handheldUpdateReady = true; handheldConfirmed = false; }
+      Serial.printf("[HUB] handheld.bin stored (%u bytes)\n", up.totalSize);
+    }
+  });
+
+  // ---- OTA Hub: receive and store bridge script ----
+  server.on("/upload-bridge", HTTP_POST, []() {
+    server.send(200, "text/plain", bridgeUpdateReady ? "OK — bridge.py stored" : "FAIL");
+  }, []() {
+    HTTPUpload& up = server.upload();
+    static File f;
+    if (up.status == UPLOAD_FILE_START) {
+      Serial.printf("[HUB] Storing bridge script: %s\n", up.filename.c_str());
+      f = LittleFS.open("/bridge.py", "w");
+    } else if (up.status == UPLOAD_FILE_WRITE && f) {
+      f.write(up.buf, up.currentSize);
+    } else if (up.status == UPLOAD_FILE_END) {
+      if (f) { f.close(); bridgeUpdateReady = true; bridgeConfirmed = false; }
+      Serial.printf("[HUB] bridge.py stored (%u bytes)\n", up.totalSize);
+    }
+  });
+
+  // ---- OTA Hub: serve stored handheld firmware to handheld ----
+  server.on("/handheld-firmware", HTTP_GET, []() {
+    if (!LittleFS.exists("/handheld.bin")) {
+      server.send(404, "text/plain", "No handheld firmware uploaded yet");
+      return;
+    }
+    File f = LittleFS.open("/handheld.bin", "r");
+    server.streamFile(f, "application/octet-stream");
+    f.close();
+  });
+
+  // ---- OTA Hub: serve stored bridge script to phone ----
+  server.on("/bridge-script", HTTP_GET, []() {
+    if (!LittleFS.exists("/bridge.py")) {
+      server.send(404, "text/plain", "No bridge script uploaded yet");
+      return;
+    }
+    File f = LittleFS.open("/bridge.py", "r");
+    server.streamFile(f, "text/plain");
+    f.close();
+  });
+
+  // ---- OTA Hub: check endpoints (devices poll these) ----
+  server.on("/handheld-update-available", HTTP_GET, []() {
+    server.send(200, "text/plain", handheldUpdateReady ? "yes" : "no");
+  });
+  server.on("/bridge-update-available", HTTP_GET, []() {
+    server.send(200, "text/plain", bridgeUpdateReady ? "yes" : "no");
+  });
+
+  // ---- OTA Hub: devices call this after successful update ----
+  server.on("/device-updated", HTTP_POST, []() {
+    String dev = server.arg("device");
+    if (dev == "handheld") {
+      handheldConfirmed = true;
+      handheldUpdateReady = false;  // clear until next upload
+      Serial.println("[HUB] Handheld confirmed update OK");
+    } else if (dev == "bridge") {
+      bridgeConfirmed = true;
+      bridgeUpdateReady = false;
+      Serial.println("[HUB] Phone bridge confirmed update OK");
+    }
+    server.send(200, "text/plain", "OK");
+    // If both confirmed and sender has a staged firmware, reboot into it
+    if (handheldConfirmed && bridgeConfirmed && senderUpdatePending) {
+      Serial.println("[HUB] All devices updated — rebooting sender into new firmware!");
+      delay(500);
+      ESP.restart();
+    }
+  });
+
+  // ---- Sender self-update: STAGED (reboots only after all devices confirm) ----
+  server.on("/update", HTTP_GET, []() {
+    server.send(200, "text/html", String(HUB_HTML));
+  });
   server.on("/update", HTTP_POST, []() {
-    server.send(200, "text/plain", (Update.hasError()) ? "FAIL" : "OK");
-    delay(500);
-    ESP.restart();
+    server.send(200, "text/plain", Update.hasError() ? "FAIL" : "OK — sender firmware staged");
+    // Do NOT restart here — wait for handheld + bridge to confirm first
   }, []() {
     HTTPUpload& upload = server.upload();
     if (upload.status == UPLOAD_FILE_START) {
-      Serial.printf("[OTA] Flashing: %s\n", upload.filename.c_str());
+      Serial.printf("[HUB] Staging sender firmware: %s\n", upload.filename.c_str());
       if (!Update.begin(UPDATE_SIZE_UNKNOWN)) Update.printError(Serial);
     } else if (upload.status == UPLOAD_FILE_WRITE) {
       if (Update.write(upload.buf, upload.currentSize) != upload.currentSize)
         Update.printError(Serial);
     } else if (upload.status == UPLOAD_FILE_END) {
-      if (Update.end(true))
-        Serial.printf("[OTA] Success! %u bytes flashed. Rebooting...\n", upload.totalSize);
-      else
+      if (Update.end(true)) {
+        senderUpdatePending = true;
+        Serial.printf("[HUB] Sender firmware staged (%u bytes) — waiting for devices\n",
+                      upload.totalSize);
+      } else {
         Update.printError(Serial);
+      }
     }
   });
 
   server.begin();
-  Serial.println("[WiFi] Web server & OTA started on port 80.");
-  Serial.printf("[INFO] TX interval: %dms | TX power: +%ddBm | Duty cycle: ~%.1f%%\n",
-                TX_INTERVAL_MS, TX_POWER_DBM,
-                (200.0 / TX_INTERVAL_MS) * 100.0); // ~200ms airtime per packet
-}
+  Serial.println("[WiFi] Web server & OTA hub started on port 80.");
+  Serial.printf("[OTA] Dashboard: http://%s.local/ota\n", MDNS_HOSTNAME);
+  Serial.printf("[INFO] TX interval: %dms | TX power: +%ddBm\n",
+                TX_INTERVAL_MS, TX_POWER_DBM);
 
 // ==============================================================================
 // [7] MAIN RUNTIME LOOP

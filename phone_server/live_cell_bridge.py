@@ -259,35 +259,73 @@ td{{padding:4px 12px;}} .good{{color:#0f0;}} .warn{{color:#ff0;}} .bad{{color:#f
     httpd.serve_forever()
 
 # ==============================================================================
-# MAIN
+# MAIN — with auto-reconnect outer loop
 # ==============================================================================
 def main():
-    global _last_sdcard_push
+    global _last_sdcard_push, _shutdown
+
+    # Self-update: check sender hub for a new bridge script
+    # The sender stores bridge.py when you upload via /ota dashboard.
+    try:
+        check = urllib.request.urlopen(
+            "http://192.168.4.1/bridge-update-available", timeout=3
+        )
+        if check.read().decode().strip() == "yes":
+            print(f"[{_ts()}] Sender has a bridge update! Downloading...")
+            script_path = os.path.abspath(__file__)
+            tmp_path    = script_path + ".tmp"
+            urllib.request.urlretrieve("http://192.168.4.1/bridge-script", tmp_path)
+            os.replace(tmp_path, script_path)
+            # Confirm to sender hub
+            urllib.request.urlopen(
+                urllib.request.Request(
+                    "http://192.168.4.1/device-updated?device=bridge",
+                    data=b""
+                ), timeout=3
+            )
+            print(f"[{_ts()}] Bridge updated! Restarting with new version...")
+            import sys
+            os.execv(sys.executable, [sys.executable] + sys.argv)
+    except Exception as e:
+        print(f"[{_ts()}] Hub update check skipped: {e}")
+
     print("=" * 70)
     print("  GridWatcher Telemetry Bridge & ML Dataset Logger v3")
     print(f"  CSV: {CSV_FILE}  |  Web: http://localhost:{PORT}")
     print(f"  ADB check: every {_adb_check_interval}s  |  Batt cache: {_batt_interval}s  |  sdcard push: every {_sdcard_push_interval}s")
+    print("  Auto-reconnect: ON (retries every 5s on disconnect)")
     print("=" * 70)
 
-    init_csv()  # Called once only
+    init_csv()
     _last_sdcard_push = time.time()
 
     web_thread = threading.Thread(target=start_web_server, daemon=True)
     web_thread.start()
 
+    # Outer loop: keeps the bridge running forever, reconnecting on any error
     while not _shutdown:
-        ensure_adb_connection()  # Throttled — only runs every 30s
-        dbm        = get_live_rsrp()
-        phone_batt = get_phone_battery()  # Cached — only polls ADB every 60s
+        try:
+            print(f"[{_ts()}] Bridge loop starting...")
+            while not _shutdown:
+                ensure_adb_connection()  # Throttled — only runs every 30s
+                dbm        = get_live_rsrp()
+                phone_batt = get_phone_battery()  # Cached — only polls ADB every 60s
 
-        if dbm != -999:
-            send_signal_to_esp32(dbm, phone_batt)
-        else:
-            print(f"[{_ts()}] Searching for cell signal... (PhoneBatt: {phone_batt}%)", flush=True)
+                if dbm != -999:
+                    send_signal_to_esp32(dbm, phone_batt)
+                else:
+                    print(f"[{_ts()}] Searching for cell signal... (PhoneBatt: {phone_batt}%)", flush=True)
 
-        time.sleep(2)
+                time.sleep(2)
+
+        except KeyboardInterrupt:
+            _shutdown = True
+        except Exception as e:
+            print(f"[{_ts()}] Bridge error: {e}. Reconnecting in 5s...")
+            time.sleep(5)
 
     print(f"[{_ts()}] Bridge stopped cleanly.")
+
 
 if __name__ == "__main__":
     main()

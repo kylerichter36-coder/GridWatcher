@@ -25,11 +25,14 @@
 #include <WiFi.h>
 #include <WebServer.h>
 #include <Update.h>
+#include <ESPmDNS.h>
+#include <HTTPClient.h>
 #include "wallpaper.h"
 
-// WiFi OTA — only starts when user long-presses BOOT button
-const char* otaSSID = "GridWatcher-Home";
+// WiFi OTA — connects to sender AP and pulls firmware from sender hub
+const char* otaSSID = "GridWatcher-Home";  // sender AP
 const char* otaPass = "gridwatcher123";
+#define SENDER_HOST "http://192.168.4.1"
 WebServer otaServer(80);
 bool otaModeActive = false;
 
@@ -182,78 +185,113 @@ IRAM_ATTR void onPacketReceived(void) {
 }
 
 // ==============================================================================
-// OTA MODE — activated by long-pressing BOOT button (3 seconds)
-// ==============================================================================
+// OTA mode: connect to sender AP, pull firmware from sender hub
 void startOTAMode() {
   if (otaModeActive) return;
   otaModeActive = true;
 
-  Serial.println("[OTA] Long press detected — starting WiFi OTA mode...");
+  Serial.println("[OTA] Long press detected — connecting to sender AP...");
 
-  // Show OTA mode on screen
+  // Show connecting screen
   canvas.fillScreen(0x0000);
   canvas.setTextColor(0xFFFF);
   canvas.setTextSize(1);
-  canvas.setCursor(2, 60);
+  canvas.setCursor(2, 50);
   canvas.print("OTA MODE");
-  canvas.setCursor(2, 75);
+  canvas.setCursor(2, 66);
+  canvas.setTextColor(0x4D3F);
   canvas.print("Connecting...");
   tft.drawRGBBitmap(0, 0, canvas.getBuffer(), SCR_W, SCR_H);
   digitalWrite(PIN_BLK, HIGH);
 
   WiFi.mode(WIFI_STA);
   WiFi.begin(otaSSID, otaPass);
-
   unsigned long start = millis();
-  while (WiFi.status() != WL_CONNECTED && millis() - start < 8000) {
-    delay(200);
+  while (WiFi.status() != WL_CONNECTED && millis() - start < 10000) delay(200);
+
+  if (WiFi.status() != WL_CONNECTED) {
+    canvas.fillScreen(0x0000);
+    canvas.setTextColor(0xF800);
+    canvas.setCursor(2, 60); canvas.print("SENDER AP");
+    canvas.setCursor(2, 74); canvas.print("NOT FOUND");
+    canvas.setCursor(2, 95); canvas.setTextColor(0x738E);
+    canvas.print("Is sender on?");
+    tft.drawRGBBitmap(0, 0, canvas.getBuffer(), SCR_W, SCR_H);
+    Serial.println("[OTA] Could not connect to sender AP");
+    return;
+  }
+  Serial.printf("[OTA] Connected to sender AP -> %s\n", WiFi.localIP().toString().c_str());
+
+  // Check if an update is available
+  HTTPClient http;
+  http.begin(String(SENDER_HOST) + "/handheld-update-available");
+  int code = http.GET();
+  String available = (code == HTTP_CODE_OK) ? http.getString() : "no";
+  http.end();
+
+  if (available != "yes") {
+    canvas.fillScreen(0x0000);
+    canvas.setTextColor(0x07E0);
+    canvas.setCursor(2, 55); canvas.print("UP TO DATE");
+    canvas.setCursor(2, 72); canvas.setTextColor(0x738E);
+    canvas.print("No update on");
+    canvas.setCursor(2, 85); canvas.print("sender hub");
+    tft.drawRGBBitmap(0, 0, canvas.getBuffer(), SCR_W, SCR_H);
+    Serial.println("[OTA] No update available on sender");
+    return;
   }
 
-  otaServer.on("/update", HTTP_GET, []() {
-    otaServer.send(200, "text/html", otaHTML);
-  });
-
-  otaServer.on("/update", HTTP_POST, []() {
-    otaServer.send(200, "text/plain", (Update.hasError()) ? "FAIL" : "OK");
-    delay(500);
-    ESP.restart();
-  }, []() {
-    HTTPUpload& upload = otaServer.upload();
-    if (upload.status == UPLOAD_FILE_START) {
-      if (!Update.begin(UPDATE_SIZE_UNKNOWN)) Update.printError(Serial);
-    } else if (upload.status == UPLOAD_FILE_WRITE) {
-      if (Update.write(upload.buf, upload.currentSize) != upload.currentSize)
-        Update.printError(Serial);
-    } else if (upload.status == UPLOAD_FILE_END) {
-      if (Update.end(true))
-        Serial.printf("[OTA] Flashed %u bytes. Rebooting...\n", upload.totalSize);
-      else
-        Update.printError(Serial);
-    }
-  });
-
-  otaServer.begin();
-
-  // Show IP on screen so you know where to connect
+  // Update available — stream firmware from sender
+  Serial.println("[OTA] Update available! Downloading from sender...");
   canvas.fillScreen(0x0000);
   canvas.setTextColor(0xFFFF);
-  canvas.setCursor(2, 50);
-  canvas.print("OTA READY");
-  canvas.setCursor(2, 65);
-  canvas.setTextColor(0x4D3F);
-  canvas.print("Connect to:");
-  canvas.setCursor(2, 80);
-  canvas.setTextColor(0xFFFF);
-  if (WiFi.status() == WL_CONNECTED) {
-    canvas.print(WiFi.localIP().toString().c_str());
+  canvas.setCursor(2, 45); canvas.print("UPDATING");
+  canvas.setCursor(2, 60); canvas.setTextColor(0x4D3F);
+  canvas.print("Downloading...");
+  tft.drawRGBBitmap(0, 0, canvas.getBuffer(), SCR_W, SCR_H);
+
+  HTTPClient dlHttp;
+  dlHttp.begin(String(SENDER_HOST) + "/handheld-firmware");
+  int dlCode = dlHttp.GET();
+
+  if (dlCode == HTTP_CODE_OK) {
+    int contentLen = dlHttp.getSize();
+    bool canBegin  = Update.begin(contentLen > 0 ? contentLen : UPDATE_SIZE_UNKNOWN);
+    if (canBegin) {
+      WiFiClient* stream = dlHttp.getStreamPtr();
+      size_t written = Update.writeStream(*stream);
+      if (Update.end()) {
+        Serial.printf("[OTA] Success! %u bytes written\n", written);
+        // Confirm to sender hub
+        HTTPClient conf;
+        conf.begin(String(SENDER_HOST) + "/device-updated?device=handheld");
+        conf.POST("");
+        conf.end();
+        // Show success then reboot
+        canvas.fillScreen(0x0000);
+        canvas.setTextColor(0x07E0);
+        canvas.setCursor(2, 50); canvas.print("UPDATED!");
+        canvas.setCursor(2, 65); canvas.setTextColor(0xFFFF);
+        canvas.print("Rebooting...");
+        tft.drawRGBBitmap(0, 0, canvas.getBuffer(), SCR_W, SCR_H);
+        delay(1500);
+        ESP.restart();
+      } else {
+        Update.printError(Serial);
+      }
+    } else {
+      Serial.println("[OTA] Update.begin() failed — not enough space?");
+    }
   } else {
-    canvas.print("WIFI FAIL");
+    Serial.printf("[OTA] Download failed, HTTP %d\n", dlCode);
   }
-  canvas.setCursor(2, 100);
-  canvas.setTextColor(0x738E);
-  canvas.print("then visit");
-  canvas.setCursor(2, 115);
-  canvas.print("<IP>/update");
+  dlHttp.end();
+
+  canvas.fillScreen(0x0000);
+  canvas.setTextColor(0xF800);
+  canvas.setCursor(2, 60); canvas.print("OTA FAIL");
+  canvas.setCursor(2, 75); canvas.setTextColor(0x738E);
+  canvas.print("Check serial");
   tft.drawRGBBitmap(0, 0, canvas.getBuffer(), SCR_W, SCR_H);
 }
 
