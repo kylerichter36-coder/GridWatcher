@@ -27,7 +27,9 @@
 // ==============================================================================
 #define SERIAL_VERBOSE    true    // Set false to suppress per-packet TX log spam
 #define TX_INTERVAL_MS    2000
-#define TX_POWER_DBM      14
+#define TX_POWER_DBM      22   // SX1262 max. Legal note: 868MHz limit is 25mW ERP (+14dBm ERP).
+                               // +22dBm TX + 0dBi antenna = +22dBm EIRP (over limit with plain wire).
+                               // Drop to +9dBm when using the +5dBi antenna to stay legal.
 #define CELL_STALE_MS     30000
 
 // LoRa radio config — MUST match exactly on sender and handheld
