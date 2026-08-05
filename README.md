@@ -116,7 +116,7 @@ The output label (y vector) predicts 0 (Stable) or 1 (Pre Outage). The model lea
 The current functional prototype is hand-soldered on copper protoboards. While it successfully validates the firmware architecture, LoRa RF communication, and the Termux standalone SMS gateway, the hand-soldered wiring and bad joints introduce noticeable RF impedance losses (limiting range tests) and are not suited for permanent high-voltage deployment.
 
 ### 6.2 V2: Production-Grade Custom PCB Stack (In Design & Pre-Production)
-To transition GridWatcher into a professional product that closely resembles a consumer device you'd find on the market, we are designing a custom dual-layer manufactured PCB stack (bypassing prototype boards entirely):
+To transition GridWatcher into a professional product that closely resembles a consumer device you'd find on the market, I am designing a custom dual-layer manufactured PCB stack (bypassing prototype boards entirely):
 
 *   **Modular V-Score Separation:** The design features a physical V-score line allowing the high-voltage section to be physically snapped away and isolated from the 3.3V logic section.
 *   **Bottom Board (The Power Slice):** Houses the HLK-10M05 AC-DC module, ZMPT101B active voltage sensor, MT3608 boost regulator, fuse protection, and AC prongs. Features a strict **6mm creepage clearance** between high-voltage AC mains and low-voltage DC traces for safety.
