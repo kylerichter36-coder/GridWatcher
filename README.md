@@ -110,12 +110,16 @@ The output label (y vector) predicts 0 (Stable) or 1 (Pre Outage). The model lea
 
 ***
 
-## 6. Modular PCB Stack Engineering
+## 6. Project Development Roadmap: V1 vs V2
 
-The final PCB design is a two board, break apart modular stack to isolate high voltage.
+### 6.1 V1: Hand-Soldered Prototype (Current Model)
+The current functional prototype is hand-soldered on copper protoboards. While it successfully validates the firmware architecture, LoRa RF communication, and the Termux standalone SMS gateway, the hand-soldered wiring and bad joints introduce noticeable RF impedance losses (limiting range tests) and are not suited for permanent high-voltage deployment.
 
-### 6.1 Bottom Board (The Power Slice)
-Features an explicit **6mm creepage distance** between AC Live/Neutral traces and DC low voltage traces. Contains the ZMPT101B, HLK 10M05 AC DC module, MT3608 boost module, Fuse, and AC prongs. 
+### 6.2 V2: Production-Grade Custom PCB Stack (In Design & Pre-Production)
+To transition GridWatcher into a professional product that closely resembles a consumer device you'd find on the market, we are designing a custom dual-layer manufactured PCB stack (bypassing prototype boards entirely):
 
-### 6.2 Top Board (The Logic Slice)
-Contains the FireBeetle 2 ESP32 C6. Standard 2.54mm female headers allow expansion "Hats" (like relays or IR blasters). The two boards are held together using M2.5 brass standoffs, passing 5V and GND safely to the logic slice. When manufactured, the board uses a V score so it can be physically snapped into two isolated boards.
+*   **Modular V-Score Separation:** The design features a physical V-score line allowing the high-voltage section to be physically snapped away and isolated from the 3.3V logic section.
+*   **Bottom Board (The Power Slice):** Houses the HLK-10M05 AC-DC module, ZMPT101B active voltage sensor, MT3608 boost regulator, fuse protection, and AC prongs. Features a strict **6mm creepage clearance** between high-voltage AC mains and low-voltage DC traces for safety.
+*   **Top Board (The Logic Slice):** Holds the FireBeetle 2 ESP32-C6 and features standard female expansion headers.
+*   **Commercial Form Factor:** Designed to plug directly into any standard wall outlet (similar to a commercial smart plug or WiFi repeater), running off mains power with automatic fallback to an internal LiPo battery during blackouts.
+
