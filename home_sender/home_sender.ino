@@ -49,10 +49,12 @@ bool senderUpdatePending  = false;   // sender own firmware staged, waiting for 
 bool handheldConfirmed    = false;   // handheld reported OK
 bool bridgeConfirmed      = false;   // phone bridge reported OK
 
-// Simulated Grid State
-float lastVoltage         = 230.0;
-float lastFrequency       = 50.0;
+// Grid State
+float lastVoltage         = 0.0;
+float lastFrequency       = 0.0;
+float zmptCalibration     = 0.46;  // Multiplier mapping raw RMS ADC units to real AC Volts (adjust via /calibrate?val=0.46)
 #define PIN_BOOT_BTN      9
+#define PIN_ZMPT          2        // ZMPT101B active module analog OUT on GPIO 2
 
 // Sender hub dashboard — upload firmware for all 3 devices from one page.
 // Laptop accesses this at http://gridwatcher-sender.local/ota (stays on home WiFi).
@@ -196,6 +198,98 @@ void readBattery() {
   batteryPercent = constrain((int)pct, 0, 100);
 }
 
+// Read Real RMS Voltage & Frequency from ZMPT101B Active Module on GPIO 2
+void readZMPT101B(float &vRMS, float &freq) {
+  // If BOOT button is held, simulate outage (0V, 0Hz) for easy SMS testing
+  if (digitalRead(PIN_BOOT_BTN) == LOW) {
+    vRMS = 0.0;
+    freq = 0.0;
+    Serial.println("[SIM] Outage simulated via BOOT button hold!");
+    return;
+  }
+
+  // Sample over 40ms (2 full 50Hz AC cycles)
+  unsigned long start = millis();
+  long sumADC = 0;
+  int sampleCount = 0;
+  int minVal = 4095;
+  int maxVal = 0;
+
+  // First pass: 40ms to calculate DC offset (center bias point) and peak-to-peak
+  while (millis() - start < 40) {
+    int raw = analogRead(PIN_ZMPT);
+    if (raw < minVal) minVal = raw;
+    if (raw > maxVal) maxVal = raw;
+    sumADC += raw;
+    sampleCount++;
+    delayMicroseconds(100);
+  }
+
+  int p2p = maxVal - minVal;
+  int dcOffset = (sampleCount > 0) ? (sumADC / sampleCount) : 2048;
+
+  // If signal is flat (no AC wave or sensor unpowered/unplugged), return 0V / 0Hz
+  if (p2p < 40) {
+    vRMS = 0.0;
+    freq = 0.0;
+    return;
+  }
+
+  // Second pass: 40ms to calculate True RMS and zero-crossing frequency
+  double sumSquares = 0;
+  int rmsSamples = 0;
+  unsigned long lastZeroCross = 0;
+  unsigned long zeroCrossPeriodSum = 0;
+  int zeroCrossCount = 0;
+  bool lastAbove = false;
+
+  start = millis();
+  while (millis() - start < 40) {
+    int raw = analogRead(PIN_ZMPT);
+    double diff = raw - dcOffset;
+    sumSquares += diff * diff;
+    rmsSamples++;
+
+    bool currentAbove = (raw > dcOffset);
+    if (!lastAbove && currentAbove) {
+      unsigned long nowMicros = micros();
+      if (lastZeroCross > 0) {
+        unsigned long period = nowMicros - lastZeroCross;
+        if (period >= 15000 && period <= 25000) { // 50Hz nominal = 20,000us
+          zeroCrossPeriodSum += period;
+          zeroCrossCount++;
+        }
+      }
+      lastZeroCross = nowMicros;
+    }
+    lastAbove = currentAbove;
+    delayMicroseconds(100);
+  }
+
+  if (rmsSamples == 0) {
+    vRMS = 0.0;
+    freq = 0.0;
+    return;
+  }
+
+  double meanSquare = sumSquares / rmsSamples;
+  double rawRMS = sqrt(meanSquare);
+
+  vRMS = rawRMS * zmptCalibration;
+
+  if (zeroCrossCount > 0) {
+    float avgPeriodUs = (float)zeroCrossPeriodSum / zeroCrossCount;
+    freq = 1000000.0 / avgPeriodUs;
+  } else {
+    freq = (vRMS > 10.0) ? 50.0 : 0.0;
+  }
+
+  if (SERIAL_VERBOSE) {
+    Serial.printf("[ZMPT101B] rawRMS: %.1f | P2P: %d | DC: %d -> vRMS: %.1fV | Freq: %.2fHz\n",
+                  rawRMS, p2p, dcOffset, vRMS, freq);
+  }
+}
+
 void reinitRadio() {
   unsigned long now = millis();
   // Backoff: don't retry reinit until backoff window has passed
@@ -271,6 +365,7 @@ void setup() {
   pinMode(LED_PIN, OUTPUT);
   digitalWrite(LED_PIN, LOW);
   pinMode(PIN_BOOT_BTN, INPUT_PULLUP);
+  pinMode(PIN_ZMPT, INPUT);
 
   Serial.println("\n[ESP32-C6] Booting GridWatcher Home Sender v3...");
   analogReadResolution(12);
@@ -480,6 +575,20 @@ void setup() {
     }
   });
 
+  // Live ZMPT101B Calibration endpoint: http://192.168.4.1/calibrate?val=0.46
+  server.on("/calibrate", HTTP_GET, []() {
+    if (server.hasArg("val")) {
+      zmptCalibration = server.arg("val").toFloat();
+      char msg[80];
+      snprintf(msg, sizeof(msg), "ZMPT101B calibration updated to %.4f", zmptCalibration);
+      server.send(200, "text/plain", msg);
+    } else {
+      char msg[140];
+      snprintf(msg, sizeof(msg), "Current zmptCalibration: %.4f\nUse /calibrate?val=0.4600 to adjust.", zmptCalibration);
+      server.send(200, "text/plain", msg);
+    }
+  });
+
   server.begin();
   Serial.println("[WiFi] Web server & OTA hub started on port 80.");
   Serial.printf("[OTA] Dashboard: http://%s.local/ota\n", MDNS_HOSTNAME);
@@ -518,22 +627,17 @@ void loop() {
     packetSequence++;
     readBattery();
 
-    // Simulated AC readings (replace with real ZMPT101B sensor reads)
-    float simV;
-    if (digitalRead(PIN_BOOT_BTN) == LOW) {
-      simV = 0.0;
-      Serial.println("[SIM] Outage simulated via BOOT button hold!");
-    } else {
-      simV = 230.0 + random(-15, 16) / 10.0;
-    }
-    float simF = (simV > 10.0) ? (49.9 + random(0, 3) / 10.0) : 0.0;
+    // Real ZMPT101B AC voltage & frequency reads from GPIO 2
+    float realV = 0.0;
+    float realF = 0.0;
+    readZMPT101B(realV, realF);
 
-    lastVoltage = simV;
-    lastFrequency = simF;
+    lastVoltage = realV;
+    lastFrequency = realF;
 
     snprintf(payload, sizeof(payload),
       "V:%.1f,F:%.2f,B:%d,S:%d,PB:%d,SEQ:%lu",
-      simV, simF, batteryPercent, cellSignalDbm, phoneBatteryPercent, packetSequence);
+      realV, realF, batteryPercent, cellSignalDbm, phoneBatteryPercent, packetSequence);
 
     if (SERIAL_VERBOSE) {
       Serial.printf("TX [%lu]: %s\n", packetSequence, payload);
