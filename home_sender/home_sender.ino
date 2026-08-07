@@ -54,7 +54,7 @@ float lastVoltage         = 0.0;
 float lastFrequency       = 0.0;
 float zmptCalibration     = 0.46;  // Multiplier mapping raw RMS ADC units to real AC Volts (adjust via /calibrate?val=0.46)
 #define PIN_BOOT_BTN      9
-#define PIN_ZMPT          2        // ZMPT101B active module analog OUT on GPIO 2
+#define PIN_ZMPT          6        // ZMPT101B active module analog OUT on GPIO 6
 
 // Sender hub dashboard — upload firmware for all 3 devices from one page.
 // Laptop accesses this at http://gridwatcher-sender.local/ota (stays on home WiFi).
