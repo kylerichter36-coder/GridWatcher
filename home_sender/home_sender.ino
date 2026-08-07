@@ -143,8 +143,8 @@ unsigned long ledOffMs = 0;  // millis() when LED should turn off (0 = already o
 // [2] NETWORK CONFIGURATION
 // ==============================================================================
 // ---- Home WiFi (primary) ----
-const char* homeSSID = "YOUR_HOME_WIFI_NAME";      // <-- fill in
-const char* homePass = "YOUR_HOME_WIFI_PASSWORD";  // <-- fill in
+const char* homeSSID = "Afrihost ER";      // <-- fill in
+const char* homePass = "DeLacePTYLTD@1965";  // <-- fill in
 
 // ---- Phone hotspot (fallback when away from home) ----
 const char* phoneSSID = "YOUR_PHONE_HOTSPOT_NAME";     // <-- fill in
@@ -228,8 +228,19 @@ void readZMPT101B(float &vRMS, float &freq) {
   int p2p = maxVal - minVal;
   int dcOffset = (sampleCount > 0) ? (sumADC / sampleCount) : 2048;
 
-  // If signal is flat (no AC wave or sensor unpowered/unplugged), return 0V / 0Hz
-  if (p2p < 40) {
+  // Validate DC bias offset: active ZMPT101B op-amp MUST sit between 0.5V and 3.0V (ADC 500..3800)
+  // If DC offset is near 0 (like DC: 55), the module is unpowered, ungrounded, or floating!
+  if (dcOffset < 500 || dcOffset > 3800) {
+    vRMS = 0.0;
+    freq = 0.0;
+    if (SERIAL_VERBOSE) {
+      Serial.printf("[ZMPT101B] UNPOWERED/FLOATING (DC: %d | P2P: %d) -> Check VCC 5V & GND!\n", dcOffset, p2p);
+    }
+    return;
+  }
+
+  // If signal peak-to-peak is below 300 ADC units (mains is unplugged / 0V AC), return 0V / 0Hz
+  if (p2p < 300) {
     vRMS = 0.0;
     freq = 0.0;
     return;
