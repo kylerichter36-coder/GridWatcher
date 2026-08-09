@@ -19,11 +19,69 @@
 #include <Arduino.h>
 #include <SPI.h>
 #include <WiFi.h>
+#include <WiFiClientSecure.h>
+#include <HTTPClient.h>
 #include <WebServer.h>
 #include <Update.h>
 #include <ESPmDNS.h>
 #include <LittleFS.h>
 #include <RadioLib.h>
+#include "grid_model.h"
+
+#define CURRENT_VERSION 1
+const char* OTA_VERSION_URL = "https://raw.githubusercontent.com/kylerichter36-coder/GridWatcher/main/version.json";
+const char* OTA_BIN_URL     = "https://raw.githubusercontent.com/kylerichter36-coder/GridWatcher/main/home_sender.bin";
+
+// GitHub Direct HTTPS Auto-OTA Self-Flashing Engine
+void checkGitHubAutoOTA() {
+  if (WiFi.status() != WL_CONNECTED) return;
+  Serial.println("[Auto-OTA] Checking GitHub for firmware and ML model updates...");
+  
+  WiFiClientSecure client;
+  client.setInsecure(); // Bypass SSL certificate verification for GitHub raw CDN
+  
+  HTTPClient http;
+  if (http.begin(client, OTA_VERSION_URL)) {
+    int httpCode = http.GET();
+    if (httpCode == HTTP_CODE_OK) {
+      String payload = http.getString();
+      int remoteVersion = 0;
+      int idx = payload.indexOf("\"version\":");
+      if (idx != -1) {
+        remoteVersion = payload.substring(idx + 10).toInt();
+      }
+      
+      Serial.printf("[Auto-OTA] Local Version: v%d | GitHub Remote Version: v%d\n", CURRENT_VERSION, remoteVersion);
+      if (remoteVersion > CURRENT_VERSION) {
+        Serial.println("[Auto-OTA] NEW FIRMWARE / ML MODEL VERSION DETECTED ON GITHUB!");
+        Serial.println("[Auto-OTA] Downloading home_sender.bin and self-flashing over HTTPS...");
+        
+        HTTPClient httpBin;
+        if (httpBin.begin(client, OTA_BIN_URL)) {
+          int binCode = httpBin.GET();
+          if (binCode == HTTP_CODE_OK) {
+            int contentLength = httpBin.getSize();
+            if (Update.begin(contentLength)) {
+              WiFiClient* stream = httpBin.getStreamPtr();
+              size_t written = Update.writeStream(*stream);
+              if (written == contentLength) {
+                Serial.println("[Auto-OTA] Written successfully! Finalizing update...");
+                if (Update.end(true)) {
+                  Serial.println("[Auto-OTA] OTA SUCCESSFUL! Rebooting into new firmware...");
+                  ESP.restart();
+                }
+              }
+            }
+          }
+          httpBin.end();
+        }
+      } else {
+        Serial.println("[Auto-OTA] Firmware and ML model weights are up to date!");
+      }
+    }
+    http.end();
+  }
+}
 
 // ==============================================================================
 // [0] CONFIG FLAGS
@@ -450,6 +508,8 @@ void setup() {
       MDNS.addService("http", "tcp", 80);
       Serial.printf("[mDNS] OTA hub: http://%s.local/ota\n", MDNS_HOSTNAME);
     }
+    // Check GitHub for new firmware & ML model weights
+    checkGitHubAutoOTA();
   }
 
   server.on("/signal", HTTP_POST, handleSignal);
