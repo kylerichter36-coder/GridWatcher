@@ -201,8 +201,8 @@ unsigned long ledOffMs = 0;  // millis() when LED should turn off (0 = already o
 // [2] NETWORK CONFIGURATION
 // ==============================================================================
 // ---- Home WiFi (primary) ----
-const char* homeSSID = "Afrihost ER";      // <-- fill in
-const char* homePass = "DeLacePTYLTD@1965";  // <-- fill in
+const char* homeSSID = "YOUR_WIFI_SSID";      // <-- fill in
+const char* homePass = "YOUR_WIFI_PASSWORD";  // <-- fill in
 
 // ---- Phone hotspot (fallback when away from home) ----
 const char* phoneSSID = "YOUR_PHONE_HOTSPOT_NAME";     // <-- fill in
