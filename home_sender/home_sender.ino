@@ -200,9 +200,16 @@ unsigned long ledOffMs = 0;  // millis() when LED should turn off (0 = already o
 // ==============================================================================
 // [2] NETWORK CONFIGURATION
 // ==============================================================================
+#include "secrets.h"
+
 // ---- Home WiFi (primary) ----
-const char* homeSSID = "YOUR_WIFI_SSID";      // <-- fill in
-const char* homePass = "YOUR_WIFI_PASSWORD";  // <-- fill in
+#ifdef SECRET_WIFI_SSID
+const char* homeSSID = SECRET_WIFI_SSID;
+const char* homePass = SECRET_WIFI_PASS;
+#else
+const char* homeSSID = "YOUR_WIFI_SSID";
+const char* homePass = "YOUR_WIFI_PASSWORD";
+#endif
 
 // ---- Phone hotspot (fallback when away from home) ----
 const char* phoneSSID = "YOUR_PHONE_HOTSPOT_NAME";     // <-- fill in

@@ -1,23 +1,10 @@
-# Sensitive credentials
+# Sensitive credentials file (never push to GitHub)
 secrets.h
-config.h
-*.env
+**/secrets.h
 
-# VS Code
-.vscode/
-*.code-workspace
-
-# Python
-__pycache__/
-*.pyc
-venv/
-env/
-*.csv
-model.joblib
-
-# KiCad
-*.bak
-*.kicad_pcb-bak
-*_bak/
-fp-info-cache
-*.lck
+# Temporary & build files
+*.bin
+*.elf
+*.o
+scratch/
+.system_generated/
