@@ -152,8 +152,8 @@ inline float predictGridRisk(float voltage, float frequency, float signal) {{
             commit_msg = f"Auto-retrain ML Model v{v_data['version']} [{time.strftime('%H:%M:%S')}]"
             run_git(["git", "commit", "-m", commit_msg])
             
-            # Safe standard push (No --force)
-            git_code = run_git(["git", "push", "origin", "main"])
+            # Safe standard push to remote main branch from local HEAD
+            git_code = run_git(["git", "push", "origin", "HEAD:main"])
 
             if git_code == 0:
                 self.log_signal.emit(f"       [GIT SUCCESS] Pushed commit '{commit_msg}' to GitHub main branch.")
