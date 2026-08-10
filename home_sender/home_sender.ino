@@ -26,6 +26,7 @@
 #include <ESPmDNS.h>
 #include <LittleFS.h>
 #include <RadioLib.h>
+#include <Preferences.h>
 #include "grid_model.h"
 
 #define CURRENT_VERSION 1
@@ -491,7 +492,6 @@ void setup() {
   WiFi.setAutoReconnect(false);
 
   // Read stored Wi-Fi credentials from ESP32 Non-Volatile Flash (NVS Preferences)
-  #include <Preferences.h>
   Preferences nvPrefs;
   nvPrefs.begin("grid_wifi", false);
   String nvsSSID = nvPrefs.getString("ssid", "");
