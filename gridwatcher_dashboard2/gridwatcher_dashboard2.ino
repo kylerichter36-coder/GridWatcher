@@ -99,6 +99,8 @@ float pktLoss   = 0.0;
 // AI Prediction
 int   aiRisk = 0;
 const char* aiState = "WAIT";
+int   mlVersion = 3;
+char  mlBuildTime[20] = "21:17:15";
 
 int batteryPercent     = 0;
 int batteryMilliVolts  = 0;
@@ -599,7 +601,17 @@ void drawFrame() {
   uint16_t barCol = (aiRisk >= 60) ? COL_CRIT : (aiRisk >= 25) ? COL_WARN : COL_GOOD;
   canvas.fillRect(bx + 1, y + 1, ((bw - 2) * aiRisk) / 100, bh - 2, barCol);
 
-  y += bh + 4;
+  y += bh + 3;
+  canvas.setTextColor(cur.dim); canvas.setCursor(2, y);
+  canvas.printf("ML:v%d", mlVersion);
+  canvas.setCursor(38, y);
+  if (WiFi.status() == WL_CONNECTED) {
+    canvas.setTextColor(COL_GOOD); canvas.print("WF:OK");
+  } else {
+    canvas.setTextColor(cur.dim);  canvas.print("WF:OFF");
+  }
+
+  y += 9;
   canvas.drawFastHLine(0, y, SCR_W, cur.line);
 
   // FOOTER: Status + uptime
