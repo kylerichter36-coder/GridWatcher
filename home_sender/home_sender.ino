@@ -523,6 +523,18 @@ void setup() {
   server.on("/signal", HTTP_POST, handleSignal);
   server.on("/status",  HTTP_GET,  handleStatus);
 
+  // Home Assistant Remote Auto-OTA Trigger Endpoint
+  server.on("/trigger-ota", HTTP_POST, []() {
+    Serial.println("[HTTP] Remote Auto-OTA trigger button pressed from Home Assistant!");
+    server.send(200, "application/json", "{\"status\":\"OTA update triggered\"}");
+    checkGitHubAutoOTA();
+  });
+  server.on("/trigger-ota", HTTP_GET, []() {
+    Serial.println("[HTTP] Remote Auto-OTA trigger button pressed from Home Assistant!");
+    server.send(200, "application/json", "{\"status\":\"OTA update triggered\"}");
+    checkGitHubAutoOTA();
+  });
+
   // ---- OTA Hub: serve dashboard ----
   server.on("/ota", HTTP_GET, []() {
     String page = String(HUB_HTML);
