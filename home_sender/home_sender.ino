@@ -511,7 +511,7 @@ void setup() {
   WiFi.softAP(apSSID, apPass);
   Serial.printf("[WiFi] AP '%s' -> %s\n", apSSID, WiFi.softAPIP().toString().c_str());
 
-  WiFi.setAutoReconnect(false);
+  WiFi.setAutoReconnect(true);
 
   // Read stored Wi-Fi credentials from ESP32 Non-Volatile Flash (NVS Preferences)
   Preferences nvPrefs;
@@ -523,23 +523,26 @@ void setup() {
     homeSSID = strdup(nvsSSID.c_str());
     homePass = strdup(nvsPass.c_str());
     Serial.printf("[NVS FLASH] Loaded permanent Wi-Fi credentials: '%s'\n", homeSSID);
-  } else {
-    // Save initial credentials into permanent NVS flash memory
+  } else if (strcmp(homeSSID, "YOUR_WIFI_SSID") != 0) {
+    // Save initial credentials from secrets.h into permanent NVS flash memory
     nvPrefs.putString("ssid", homeSSID);
     nvPrefs.putString("pass", homePass);
-    Serial.printf("[NVS FLASH] Stored permanent Wi-Fi credentials: '%s'\n", homeSSID);
+    Serial.printf("[NVS FLASH] Stored permanent Wi-Fi credentials into NVS: '%s'\n", homeSSID);
   }
   nvPrefs.end();
 
-  // Try home WiFi first (10s), then phone hotspot (10s), then AP-only
+  // Try home WiFi first (15s), then phone hotspot (if configured)
   const char* networks[][2] = {{homeSSID, homePass}, {phoneSSID, phonePass}};
   const char* networkNames[] = {"Home WiFi", "Phone Hotspot"};
   bool connected = false;
   for (int n = 0; n < 2 && !connected; n++) {
+    if (strlen(networks[n][0]) == 0 || strcmp(networks[n][0], "YOUR_PHONE_HOTSPOT_NAME") == 0 || strcmp(networks[n][0], "YOUR_WIFI_SSID") == 0) {
+      continue;
+    }
     Serial.printf("[WiFi] Trying %s ('%s')...\n", networkNames[n], networks[n][0]);
     WiFi.begin(networks[n][0], networks[n][1]);
     unsigned long t = millis();
-    while (WiFi.status() != WL_CONNECTED && millis() - t < 10000) delay(200);
+    while (WiFi.status() != WL_CONNECTED && millis() - t < 15000) delay(200);
     if (WiFi.status() == WL_CONNECTED) {
       Serial.printf("[WiFi] Connected via %s -> %s\n",
                     networkNames[n], WiFi.localIP().toString().c_str());
