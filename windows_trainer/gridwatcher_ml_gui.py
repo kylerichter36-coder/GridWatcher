@@ -141,10 +141,11 @@ inline float predictGridRisk(float voltage, float frequency, float signal) {{
                 run_git(["git", "remote", "add", "origin", GIT_REMOTE_URL])
 
             run_git(["git", "remote", "set-url", "origin", GIT_REMOTE_URL])
+            run_git(["git", "branch", "-M", "main"])
             run_git(["git", "add", "home_sender/grid_model.h", "version.json", "windows_trainer/telemetry.csv"])
             commit_msg = f"Auto-retrain ML Model v{v_data['version']} [{time.strftime('%H:%M:%S')}]"
             run_git(["git", "commit", "-m", commit_msg])
-            git_code = run_git(["git", "push", "origin", "main"])
+            git_code = run_git(["git", "push", "-u", "origin", "main", "--force"])
 
             if git_code == 0:
                 self.log_signal.emit(f"       [GIT SUCCESS] Pushed commit '{commit_msg}' to GitHub main branch.")
