@@ -147,10 +147,10 @@ inline float predictGridRisk(float voltage, float frequency, float signal) {{
 
             run_git(["git", "remote", "set-url", "origin", GIT_REMOTE_URL])
 
-            # Always fetch & rebase latest GitHub changes first (auto-sync laptop/PC updates)
-            self.log_signal.emit("       [GIT] Fetching latest GitHub repository updates...")
+            # Always fetch & align to latest GitHub HEAD (preserves modified telemetry & model files!)
+            self.log_signal.emit("       [GIT] Fetching and aligning with latest GitHub repository...")
             run_git(["git", "fetch", "origin", "main"])
-            run_git(["git", "pull", "--rebase", "origin", "main", "-X", "ours"])
+            run_git(["git", "reset", "--soft", "origin/main"])
 
             # Stage strictly the updated ML model header, version file, and dataset
             run_git(["git", "add", "home_sender/grid_model.h", "version.json", "windows_trainer/telemetry.csv"])
