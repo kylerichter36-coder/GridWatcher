@@ -29,7 +29,7 @@
 #include <Preferences.h>
 #include "grid_model.h"
 
-#define CURRENT_VERSION 1
+#define CURRENT_VERSION ML_MODEL_VERSION
 const char* OTA_VERSION_URL = "https://raw.githubusercontent.com/kylerichter36-coder/GridWatcher/main/version.json";
 const char* OTA_BIN_URL     = "https://raw.githubusercontent.com/kylerichter36-coder/GridWatcher/main/home_sender.bin";
 
