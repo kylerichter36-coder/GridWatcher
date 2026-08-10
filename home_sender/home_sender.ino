@@ -30,8 +30,11 @@
 #include "grid_model.h"
 
 #define CURRENT_VERSION ML_MODEL_VERSION
-const char* OTA_VERSION_URL = "https://raw.githubusercontent.com/kylerichter36-coder/GridWatcher/main/version.json";
-const char* OTA_BIN_URL     = "https://raw.githubusercontent.com/kylerichter36-coder/GridWatcher/main/home_sender.bin";
+const char* OTA_VERSION_URL      = "https://raw.githubusercontent.com/kylerichter36-coder/GridWatcher/main/version.json";
+const char* OTA_BIN_URL          = "https://raw.githubusercontent.com/kylerichter36-coder/GridWatcher/main/home_sender.bin";
+const char* OTA_HANDHELD_BIN_URL = "https://raw.githubusercontent.com/kylerichter36-coder/GridWatcher/main/handheld.bin";
+
+bool handheldUpdateReady = false;   // handheld.bin uploaded and waiting
 
 // GitHub Direct HTTPS Auto-OTA Self-Flashing Engine
 void checkGitHubAutoOTA() {
@@ -55,8 +58,26 @@ void checkGitHubAutoOTA() {
       Serial.printf("[Auto-OTA] Local Version: v%d | GitHub Remote Version: v%d\n", CURRENT_VERSION, remoteVersion);
       if (remoteVersion > CURRENT_VERSION) {
         Serial.println("[Auto-OTA] NEW FIRMWARE / ML MODEL VERSION DETECTED ON GITHUB!");
-        Serial.println("[Auto-OTA] Downloading home_sender.bin and self-flashing over HTTPS...");
         
+        // 1. Stage handheld.bin for handheld unit in LittleFS
+        Serial.println("[Auto-OTA] Downloading handheld.bin for handheld unit...");
+        HTTPClient httpHandheld;
+        if (httpHandheld.begin(client, OTA_HANDHELD_BIN_URL)) {
+          int hCode = httpHandheld.GET();
+          if (hCode == HTTP_CODE_OK) {
+            File hFile = LittleFS.open("/handheld.bin", "w");
+            if (hFile) {
+              httpHandheld.writeToStream(&hFile);
+              hFile.close();
+              handheldUpdateReady = true;
+              Serial.println("[Auto-OTA] handheld.bin staged successfully in LittleFS!");
+            }
+          }
+          httpHandheld.end();
+        }
+
+        // 2. Download home_sender.bin and self-flash sender
+        Serial.println("[Auto-OTA] Downloading home_sender.bin and self-flashing over HTTPS...");
         HTTPClient httpBin;
         if (httpBin.begin(client, OTA_BIN_URL)) {
           int binCode = httpBin.GET();
@@ -102,7 +123,6 @@ void checkGitHubAutoOTA() {
 #define LORA_PREAMBLE 8
 
 // OTA Hub state — tracks which devices still need to update
-bool handheldUpdateReady  = false;   // handheld.bin uploaded and waiting
 bool bridgeUpdateReady    = false;   // bridge.py uploaded and waiting
 bool senderUpdatePending  = false;   // sender own firmware staged, waiting for others
 bool handheldConfirmed    = false;   // handheld reported OK
