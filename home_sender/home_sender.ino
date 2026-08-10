@@ -207,8 +207,8 @@ unsigned long ledOffMs = 0;  // millis() when LED should turn off (0 = already o
 const char* homeSSID = SECRET_WIFI_SSID;
 const char* homePass = SECRET_WIFI_PASS;
 #else
-const char* homeSSID = "YOUR_WIFI_SSID";
-const char* homePass = "YOUR_WIFI_PASSWORD";
+const char* homeSSID = "Afrihost ER";
+const char* homePass = "DeLacePTYLTD@1965";
 #endif
 
 // ---- Phone hotspot (fallback when away from home) ----
