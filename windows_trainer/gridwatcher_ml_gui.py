@@ -135,15 +135,19 @@ inline float predictGridRisk(float voltage, float frequency, float signal) {{
                         if line.strip(): self.log_signal.emit(f"       [GIT] {line.strip()}")
                 return p.returncode
 
+            # Check if .git directory exists; initialize and align if missing
             git_dir = os.path.join(REPO_DIR, ".git")
             if not os.path.exists(git_dir):
                 self.log_signal.emit("       [GIT] Connecting unzipped directory to GitHub repository...")
                 run_git(["git", "init"])
                 run_git(["git", "remote", "add", "origin", GIT_REMOTE_URL])
+                run_git(["git", "fetch", "origin", "main"])
+                run_git(["git", "reset", "--mixed", "origin/main"])
+                run_git(["git", "branch", "-M", "main"])
 
             run_git(["git", "remote", "set-url", "origin", GIT_REMOTE_URL])
 
-            # Always fetch & rebase latest GitHub changes first on every run
+            # Always fetch & rebase latest GitHub changes first (auto-sync laptop/PC updates)
             self.log_signal.emit("       [GIT] Fetching latest GitHub repository updates...")
             run_git(["git", "fetch", "origin", "main"])
             run_git(["git", "pull", "--rebase", "origin", "main", "-X", "ours"])
@@ -156,12 +160,14 @@ inline float predictGridRisk(float voltage, float frequency, float signal) {{
             # Safe standard push to remote main branch from local HEAD
             git_code = run_git(["git", "push", "origin", "HEAD:main"])
 
-            if git_code == 0:
-                self.log_signal.emit(f"       [GIT SUCCESS] Pushed commit '{commit_msg}' to GitHub main branch.")
-            else:
-                self.log_signal.emit("       [GIT ERROR] Push failed. Check internet connection or Git credentials.")
+            if git_code != 0:
+                self.log_signal.emit("       [GIT ERROR] Push failed. Aborting OTA update.")
+                self.finished_signal.emit(False, "Git push failed. OTA update aborted.")
+                return
 
-            # Step 6: Send ESP32 Auto-OTA Trigger Signal
+            self.log_signal.emit(f"       [GIT SUCCESS] Pushed commit '{commit_msg}' to GitHub main branch.")
+
+            # Step 6: Send ESP32 Auto-OTA Trigger Signal (ONLY IF GIT PUSH SUCCEEDED)
             self.progress_signal.emit(95, "Step 6/6: Triggering ESP32 Auto-OTA over Wi-Fi...")
             self.log_signal.emit("[6/6] Sending OTA trigger signal to ESP32 (192.168.3.45)...")
             
