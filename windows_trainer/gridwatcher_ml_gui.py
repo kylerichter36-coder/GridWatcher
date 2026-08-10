@@ -120,7 +120,7 @@ inline float predictGridRisk(float voltage, float frequency, float signal) {{
                 json.dump(v_data, vf, indent=2)
             self.log_signal.emit(f"       [SUCCESS] Version incremented to v{v_data['version']}")
 
-            # Step 5: Safe Git Sync (Strictly ML files only)
+            # Step 5: Safe Git Sync (Zero --force, full history preservation)
             self.progress_signal.emit(88, "Step 5/6: Syncing ML model to GitHub...")
             self.log_signal.emit("[5/6] Executing Git synchronization...")
             
@@ -137,15 +137,24 @@ inline float predictGridRisk(float voltage, float frequency, float signal) {{
 
             git_dir = os.path.join(REPO_DIR, ".git")
             if not os.path.exists(git_dir):
+                self.log_signal.emit("       [GIT] Initializing repository tracking...")
                 run_git(["git", "init"])
                 run_git(["git", "remote", "add", "origin", GIT_REMOTE_URL])
 
             run_git(["git", "remote", "set-url", "origin", GIT_REMOTE_URL])
+            run_git(["git", "fetch", "origin", "main"])
             run_git(["git", "branch", "-M", "main"])
+            
+            # Pull remote changes first to merge cleanly without forcing
+            run_git(["git", "pull", "--rebase", "origin", "main"])
+
+            # Stage strictly the updated ML model header, version file, and dataset
             run_git(["git", "add", "home_sender/grid_model.h", "version.json", "windows_trainer/telemetry.csv"])
             commit_msg = f"Auto-retrain ML Model v{v_data['version']} [{time.strftime('%H:%M:%S')}]"
             run_git(["git", "commit", "-m", commit_msg])
-            git_code = run_git(["git", "push", "-u", "origin", "main", "--force"])
+            
+            # Safe standard push (No --force)
+            git_code = run_git(["git", "push", "origin", "main"])
 
             if git_code == 0:
                 self.log_signal.emit(f"       [GIT SUCCESS] Pushed commit '{commit_msg}' to GitHub main branch.")
