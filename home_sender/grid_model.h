@@ -6,7 +6,7 @@
 #define GRID_MODEL_H
 
 #ifndef ML_MODEL_VERSION
-#define ML_MODEL_VERSION 3
+#define ML_MODEL_VERSION 4
 #endif
 
 #ifndef ML_MODEL_BUILD_TIME
