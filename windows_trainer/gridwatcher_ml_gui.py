@@ -137,16 +137,15 @@ inline float predictGridRisk(float voltage, float frequency, float signal) {{
 
             git_dir = os.path.join(REPO_DIR, ".git")
             if not os.path.exists(git_dir):
-                self.log_signal.emit("       [GIT] Initializing repository tracking...")
+                self.log_signal.emit("       [GIT] Connecting unzipped directory to GitHub repository...")
                 run_git(["git", "init"])
                 run_git(["git", "remote", "add", "origin", GIT_REMOTE_URL])
+                run_git(["git", "fetch", "origin", "main"])
+                run_git(["git", "add", "-A"])
+                run_git(["git", "commit", "-m", "Sync unzipped workspace baseline"])
+                run_git(["git", "pull", "--rebase", "origin", "main", "-X", "ours"])
 
             run_git(["git", "remote", "set-url", "origin", GIT_REMOTE_URL])
-            run_git(["git", "fetch", "origin", "main"])
-            run_git(["git", "branch", "-M", "main"])
-            
-            # Pull remote changes first to merge cleanly without forcing
-            run_git(["git", "pull", "--rebase", "origin", "main"])
 
             # Stage strictly the updated ML model header, version file, and dataset
             run_git(["git", "add", "home_sender/grid_model.h", "version.json", "windows_trainer/telemetry.csv"])
