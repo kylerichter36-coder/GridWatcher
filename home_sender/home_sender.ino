@@ -417,11 +417,11 @@ void handleSignal() {
 }
 
 void handleStatus() {
-  char json[350];
+  char json[450];
   snprintf(json, sizeof(json),
     "{\"voltage\":%.1f,\"frequency\":%.2f,\"cellSignalDbm\":%d,\"phoneBatteryPercent\":%d,"
     "\"batteryPercent\":%d,\"packetSequence\":%lu,\"staConnected\":%s,\"staIP\":\"%s\","
-    "\"txFails\":%d,\"reinitBackoffMs\":%lu,\"cellFresh\":%s}",
+    "\"txFails\":%d,\"reinitBackoffMs\":%lu,\"cellFresh\":%s,\"mlVersion\":%d,\"mlBuildTime\":\"%s\"}",
     lastVoltage, lastFrequency,
     cellSignalDbm, phoneBatteryPercent, batteryPercent,
     packetSequence,
@@ -429,7 +429,9 @@ void handleStatus() {
     WiFi.localIP().toString().c_str(),
     consecutiveTxFails,
     reinitBackoffMs,
-    (millis() - lastCellUpdate < CELL_STALE_MS) ? "true" : "false");
+    (millis() - lastCellUpdate < CELL_STALE_MS) ? "true" : "false",
+    ML_MODEL_VERSION,
+    ML_MODEL_BUILD_TIME);
   server.send(200, "application/json", json);
 }
 
