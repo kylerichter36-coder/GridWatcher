@@ -416,11 +416,12 @@ void handleSignal() {
 }
 
 void handleStatus() {
-  char json[300];
+  char json[350];
   snprintf(json, sizeof(json),
-    "{\"cellSignalDbm\":%d,\"phoneBatteryPercent\":%d,\"batteryPercent\":%d,"
-    "\"packetSequence\":%lu,\"staConnected\":%s,\"staIP\":\"%s\","
+    "{\"voltage\":%.1f,\"frequency\":%.2f,\"cellSignalDbm\":%d,\"phoneBatteryPercent\":%d,"
+    "\"batteryPercent\":%d,\"packetSequence\":%lu,\"staConnected\":%s,\"staIP\":\"%s\","
     "\"txFails\":%d,\"reinitBackoffMs\":%lu,\"cellFresh\":%s}",
+    lastVoltage, lastFrequency,
     cellSignalDbm, phoneBatteryPercent, batteryPercent,
     packetSequence,
     (WiFi.status() == WL_CONNECTED) ? "true" : "false",
