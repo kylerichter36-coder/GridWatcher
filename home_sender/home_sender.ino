@@ -490,6 +490,25 @@ void setup() {
 
   WiFi.setAutoReconnect(false);
 
+  // Read stored Wi-Fi credentials from ESP32 Non-Volatile Flash (NVS Preferences)
+  #include <Preferences.h>
+  Preferences nvPrefs;
+  nvPrefs.begin("grid_wifi", false);
+  String nvsSSID = nvPrefs.getString("ssid", "");
+  String nvsPass = nvPrefs.getString("pass", "");
+
+  if (nvsSSID.length() > 0 && nvsSSID != "YOUR_WIFI_SSID") {
+    homeSSID = strdup(nvsSSID.c_str());
+    homePass = strdup(nvsPass.c_str());
+    Serial.printf("[NVS FLASH] Loaded permanent Wi-Fi credentials: '%s'\n", homeSSID);
+  } else {
+    // Save initial credentials into permanent NVS flash memory
+    nvPrefs.putString("ssid", homeSSID);
+    nvPrefs.putString("pass", homePass);
+    Serial.printf("[NVS FLASH] Stored permanent Wi-Fi credentials: '%s'\n", homeSSID);
+  }
+  nvPrefs.end();
+
   // Try home WiFi first (10s), then phone hotspot (10s), then AP-only
   const char* networks[][2] = {{homeSSID, homePass}, {phoneSSID, phonePass}};
   const char* networkNames[] = {"Home WiFi", "Phone Hotspot"};
