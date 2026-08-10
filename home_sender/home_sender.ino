@@ -724,7 +724,35 @@ void setup() {
     }
   });
 
+  // ---- On-demand: pull handheld.bin from GitHub into LittleFS (independent of sender version) ----
+  server.on("/stage-handheld", HTTP_POST, []() {
+    if (WiFi.status() != WL_CONNECTED) {
+      server.send(503, "text/plain", "No home WiFi — cannot reach GitHub");
+      return;
+    }
+    server.send(200, "text/plain", "Fetching handheld.bin from GitHub...");
+    WiFiClientSecure ghClient;
+    ghClient.setInsecure();
+    HTTPClient ghHttp;
+    if (ghHttp.begin(ghClient, OTA_HANDHELD_BIN_URL)) {
+      int code = ghHttp.GET();
+      if (code == HTTP_CODE_OK) {
+        File hf = LittleFS.open("/handheld.bin", "w");
+        if (hf) {
+          ghHttp.writeToStream(&hf);
+          hf.close();
+          handheldUpdateReady = true;
+          Serial.println("[HUB] handheld.bin staged from GitHub — handheld can now update!");
+        }
+      } else {
+        Serial.printf("[HUB] Failed to fetch handheld.bin: HTTP %d\n", code);
+      }
+      ghHttp.end();
+    }
+  });
+
   server.begin();
+
   Serial.println("[WiFi] Web server & OTA hub started on port 80.");
   Serial.printf("[OTA] Dashboard: http://%s.local/ota\n", MDNS_HOSTNAME);
   Serial.printf("[INFO] TX interval: %dms | TX power: +%ddBm\n",
