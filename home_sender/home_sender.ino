@@ -74,7 +74,9 @@ void checkGitHubAutoOTA() {
         // 1. Stage handheld.bin for handheld unit in LittleFS
         Serial.println("[Auto-OTA] Downloading handheld.bin from Orange Pi...");
         HTTPClient httpHandheld;
+        httpHandheld.setTimeout(15000);
         WiFiClient hClient;
+        hClient.setTimeout(15);
         if (httpHandheld.begin(hClient, OTA_HANDHELD_BIN_URL)) {
           int hCode = httpHandheld.GET();
           if (hCode == HTTP_CODE_OK) {
@@ -92,7 +94,9 @@ void checkGitHubAutoOTA() {
         // 2. Download home_sender.bin and self-flash sender
         Serial.println("[Auto-OTA] Downloading home_sender.bin from Orange Pi and self-flashing...");
         HTTPClient httpBin;
+        httpBin.setTimeout(15000);
         WiFiClient bClient;
+        bClient.setTimeout(15);
         if (httpBin.begin(bClient, OTA_BIN_URL)) {
           int binCode = httpBin.GET();
           if (binCode == HTTP_CODE_OK) {
@@ -233,17 +237,22 @@ th{background:#21262d;color:#79c0ff;}
 unsigned long ledOffMs = 0;  // millis() when LED should turn off (0 = already off)
 
 // ==============================================================================
-// [2] NETWORK CONFIGURATION
-// ==============================================================================
-#include "secrets.h"
+// secrets.h is only present on the home PC that originally flashed this device.
+// On other PCs (e.g. for ML retraining), it won't exist — that is fine because
+// the compiled binary gets OTA-flashed FROM the Orange Pi which has the correct
+// binary already. The #if __has_include guard prevents compile errors.
+#if __has_include("secrets.h")
+  #include "secrets.h"
+#endif
 
 // ---- Home WiFi (primary) ----
 #ifdef SECRET_WIFI_SSID
 const char* homeSSID = SECRET_WIFI_SSID;
 const char* homePass = SECRET_WIFI_PASS;
 #else
-const char* homeSSID = "YOUR_WIFI_SSID";
-const char* homePass = "YOUR_WIFI_PASSWORD";
+// No secrets.h on this PC — credentials are already stored in NVS from original flash
+const char* homeSSID = "";
+const char* homePass = "";
 #endif
 
 // ---- Phone hotspot (fallback when away from home) ----
@@ -533,15 +542,18 @@ void setup() {
   String nvsSSID = nvPrefs.getString("ssid", "");
   String nvsPass = nvPrefs.getString("pass", "");
 
-  if (nvsSSID.length() > 0 && nvsSSID != "YOUR_WIFI_SSID") {
+  if (nvsSSID.length() > 0) {
+    // NVS has credentials from a previous flash — use those
     homeSSID = strdup(nvsSSID.c_str());
     homePass = strdup(nvsPass.c_str());
     Serial.printf("[NVS FLASH] Loaded permanent Wi-Fi credentials: '%s'\n", homeSSID);
-  } else if (strcmp(homeSSID, "YOUR_WIFI_SSID") != 0) {
-    // Save initial credentials from secrets.h into permanent NVS flash memory
+  } else if (strlen(homeSSID) > 0) {
+    // secrets.h was present on the compiling PC — save to NVS for future builds
     nvPrefs.putString("ssid", homeSSID);
     nvPrefs.putString("pass", homePass);
     Serial.printf("[NVS FLASH] Stored permanent Wi-Fi credentials into NVS: '%s'\n", homeSSID);
+  } else {
+    Serial.println("[NVS FLASH] No Wi-Fi credentials in NVS or secrets.h — AP-only mode.");
   }
   nvPrefs.end();
 
