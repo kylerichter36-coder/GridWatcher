@@ -44,6 +44,10 @@ def find_arduino_cli():
     """Search all known locations for arduino-cli.exe on Windows."""
     import shutil, glob
     candidates = [
+        # First: check local tools/ folder downloaded by installer.bat
+        os.path.join(_SCRIPT_DIR, "tools", "arduino-cli.exe"),
+        os.path.join(REPO_DIR, "tools", "arduino-cli.exe"),
+        # Then: check standard Arduino IDE install paths
         r"C:\Program Files\Arduino IDE\resources\app\lib\backend\resources\arduino-cli.exe",
         r"C:\Program Files (x86)\Arduino IDE\resources\app\lib\backend\resources\arduino-cli.exe",
         os.path.join(os.environ.get("LOCALAPPDATA", ""), "Arduino15", "arduino-cli.exe"),
@@ -61,7 +65,8 @@ def find_arduino_cli():
         results = glob.glob(pattern, recursive=True)
         if results:
             return results[0]
-    return r"C:\Program Files\Arduino IDE\resources\app\lib\backend\resources\arduino-cli.exe"
+    # Default fallback (will be caught by CLI exists: False check)
+    return os.path.join(_SCRIPT_DIR, "tools", "arduino-cli.exe")
 
 ARDUINO_CLI = find_arduino_cli()
 FQBN        = "esp32:esp32:dfrobot_firebeetle2_esp32c6:CDCOnBoot=cdc"
@@ -80,8 +85,9 @@ class RetrainerWorker(QThread):
             self.log_signal.emit(f"[INIT] arduino-cli : {ARDUINO_CLI}")
             self.log_signal.emit(f"[INIT] CLI exists  : {os.path.isfile(ARDUINO_CLI)}")
             if not os.path.isfile(ARDUINO_CLI):
-                self.log_signal.emit("[ERROR] arduino-cli NOT FOUND! Install Arduino IDE from https://www.arduino.cc/en/software")
-                self.finished_signal.emit(False, "arduino-cli not found. Please install Arduino IDE.")
+                self.log_signal.emit("[ERROR] arduino-cli NOT FOUND!")
+                self.log_signal.emit("[ERROR] Run install_startup.bat first — it will download everything automatically.")
+                self.finished_signal.emit(False, "arduino-cli not found. Run install_startup.bat first!")
                 return
 
             # Step 1: Download telemetry from Orange Pi
