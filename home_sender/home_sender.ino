@@ -50,73 +50,27 @@ void blinkDebugLED(int count) {
   }
 }
 
-// GitHub Direct HTTP Auto-OTA Self-Flashing Engine (via Orange Pi local server)
+// GitHub Direct HTTP/HTTPS Auto-OTA Self-Flashing Engine (Local Server + GitHub Fallback)
 void checkGitHubAutoOTA() {
   if (WiFi.status() != WL_CONNECTED) return;
-  Serial.println("[Auto-OTA] Checking Orange Pi for firmware updates...");
+  Serial.println("[Auto-OTA] Checking for firmware updates...");
   
-  WiFiClient client;  // Plain HTTP — no SSL needed for local server
+  int remoteVersion = 0;
+  String binUrl = "";
+  String handheldUrl = "";
+
+  // 1. Try Orange Pi local server first
+  WiFiClient client;
   HTTPClient http;
   if (http.begin(client, OTA_VERSION_URL)) {
     int httpCode = http.GET();
     if (httpCode == HTTP_CODE_OK) {
       String payload = http.getString();
-      int remoteVersion = 0;
       int idx = payload.indexOf("\"version\":");
       if (idx != -1) {
         remoteVersion = payload.substring(idx + 10).toInt();
-      }
-      
-      Serial.printf("[Auto-OTA] Local Version: v%d | GitHub Remote Version: v%d\n", CURRENT_VERSION, remoteVersion);
-      if (remoteVersion > CURRENT_VERSION) {
-        Serial.println("[Auto-OTA] NEW FIRMWARE / ML MODEL VERSION DETECTED ON GITHUB!");
-        
-        // 1. Stage handheld.bin for handheld unit in LittleFS
-        Serial.println("[Auto-OTA] Downloading handheld.bin from Orange Pi...");
-        HTTPClient httpHandheld;
-        httpHandheld.setTimeout(15000);
-        WiFiClient hClient;
-        hClient.setTimeout(15);
-        if (httpHandheld.begin(hClient, OTA_HANDHELD_BIN_URL)) {
-          int hCode = httpHandheld.GET();
-          if (hCode == HTTP_CODE_OK) {
-            File hFile = LittleFS.open("/handheld.bin", "w");
-            if (hFile) {
-              httpHandheld.writeToStream(&hFile);
-              hFile.close();
-              handheldUpdateReady = true;
-              Serial.println("[Auto-OTA] handheld.bin staged successfully in LittleFS!");
-            }
-          }
-          httpHandheld.end();
-        }
-
-        // 2. Download home_sender.bin and self-flash sender
-        Serial.println("[Auto-OTA] Downloading home_sender.bin from Orange Pi and self-flashing...");
-        HTTPClient httpBin;
-        httpBin.setTimeout(15000);
-        WiFiClient bClient;
-        bClient.setTimeout(15);
-        if (httpBin.begin(bClient, OTA_BIN_URL)) {
-          int binCode = httpBin.GET();
-          if (binCode == HTTP_CODE_OK) {
-            int contentLength = httpBin.getSize();
-            if (Update.begin(contentLength)) {
-              WiFiClient* stream = httpBin.getStreamPtr();
-              size_t written = Update.writeStream(*stream);
-              if (written == contentLength) {
-                Serial.println("[Auto-OTA] Written successfully! Finalizing update...");
-                if (Update.end(true)) {
-                  Serial.println("[Auto-OTA] OTA SUCCESSFUL! Rebooting into new firmware...");
-                  ESP.restart();
-                }
-              }
-            }
-          }
-          httpBin.end();
-        }
-      } else {
-        Serial.println("[Auto-OTA] Firmware and ML model weights are up to date!");
+        binUrl = OTA_BIN_URL;
+        handheldUrl = OTA_HANDHELD_BIN_URL;
       }
     }
     http.end();
