@@ -119,39 +119,42 @@ class RetrainerWorker(QThread):
             df = pd.read_csv(LOCAL_CSV_PATH)
             self.log_signal.emit(f"       [DATA] Loaded {len(df)} telemetry samples.")
 
-            # Compute rolling features with gap detection (timestamp delta > 2s invalidates window)
+            # Clean cell_signal sentinels: map -999 or invalid values (< -120 dBm) to realistic -110.0 dBm
+            if "cell_signal" in df.columns:
+                df["cell_signal"] = np.where(df["cell_signal"] < -120, -110.0, df["cell_signal"])
+            else:
+                df["cell_signal"] = -110.0
+
+            # Compute time delta between consecutive telemetry rows (real rows logged ~10s apart)
             if "timestamp" in df.columns:
                 ts_dt = pd.to_datetime(df["timestamp"], errors="coerce")
-                dt = ts_dt.diff().dt.total_seconds().fillna(1.0)
+                dt = ts_dt.diff().dt.total_seconds().fillna(10.0)
             else:
-                dt = pd.Series(1.0, index=df.index)
+                dt = pd.Series(10.0, index=df.index)
 
-            # Mask non-consecutive timestamp gaps
-            gap_mask = dt > 2.0
+            # Mask genuine telemetry gaps (dt > 35s indicates server restart or loss)
+            gap_mask = dt > 35.0
 
-            # 10s fast transient rate of change
-            df["dV_dt_10s"] = (df["voltage"] - df["voltage"].shift(10)) / 10.0
-            df["dF_dt_10s"] = (df["frequency"] - df["frequency"].shift(10)) / 10.0
-            df.loc[gap_mask.rolling(10, min_periods=1).max() > 0, ["dV_dt_10s", "dF_dt_10s"]] = 0.0
+            # Compute time-adjusted rate of change & rolling stats matching 10s/30s horizons
+            df["dV_dt_10s"] = (df["voltage"] - df["voltage"].shift(1)) / dt.clip(lower=1.0)
+            df["dF_dt_10s"] = (df["frequency"] - df["frequency"].shift(1)) / dt.clip(lower=1.0)
+            df.loc[gap_mask, ["dV_dt_10s", "dF_dt_10s"]] = 0.0
 
-            # 30s rolling standard deviation & trend slope
-            df["v_std_30s"] = df["voltage"].rolling(30, min_periods=30).std()
-            df["f_std_30s"] = df["frequency"].rolling(30, min_periods=30).std()
-            
-            # Simple 30s linear slope estimation
-            df["v_slope_30s"] = (df["voltage"] - df["voltage"].shift(30)) / 30.0
-            df.loc[gap_mask.rolling(30, min_periods=1).max() > 0, ["v_std_30s", "f_std_30s", "v_slope_30s"]] = 0.0
+            df["v_std_30s"] = df["voltage"].rolling(3, min_periods=2).std()
+            df["f_std_30s"] = df["frequency"].rolling(3, min_periods=2).std()
+            df["v_slope_30s"] = (df["voltage"] - df["voltage"].shift(3)) / (dt.rolling(3).sum().clip(lower=1.0))
+            df.loc[gap_mask.rolling(3, min_periods=1).max() > 0, ["v_std_30s", "f_std_30s", "v_slope_30s"]] = 0.0
 
             # Fill initial window startup NaNs with 0.0
             df = df.fillna(0.0)
 
             # Continuous 0-30s forward-looking predictive target labeling
-            # Label = 1 if an anomaly (V < 210V or V > 250V or F outside 49.5-50.5Hz) occurs in t+1..t+30 while current t is NORMAL
+            # Label = 1 if an anomaly (V < 210V or V > 250V or F outside 49.5-50.5Hz) occurs in t+1..t+3 while current t is NORMAL
             is_anomaly = (df["voltage"] < 210.0) | (df["voltage"] > 250.0) | (df["frequency"] < 49.5) | (df["frequency"] > 50.5)
             is_normal_now = (df["voltage"] >= 210.0) & (df["voltage"] <= 250.0) & (df["frequency"] >= 49.5) & (df["frequency"] <= 50.5)
             
-            # Shift backwards to see if an anomaly occurs anywhere in the future 1..30 samples
-            future_anomaly = is_anomaly.iloc[::-1].rolling(30, min_periods=1).max().iloc[::-1].shift(-1).fillna(0) > 0
+            # Shift backwards to see if an anomaly occurs anywhere in the future 3 samples (~30 seconds)
+            future_anomaly = is_anomaly.iloc[::-1].rolling(3, min_periods=1).max().iloc[::-1].shift(-1).fillna(0) > 0
             df["target_risk"] = np.where(is_normal_now & future_anomaly, 1, 0)
 
             # Step 2: Scikit-Learn Random Forest 3-Tree Training

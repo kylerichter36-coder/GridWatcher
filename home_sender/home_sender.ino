@@ -863,71 +863,76 @@ void loop() {
     }
   }
 
-  // Automatic telemetry broadcast every TX_INTERVAL_MS (2 seconds)
-  if (millis() - lastSendTime >= TX_INTERVAL_MS) {
-    lastSendTime = millis();
-    packetSequence++;
-    readBattery();
-
-    // Real ZMPT101B AC voltage & frequency reads from GPIO 2
-    float realV = 0.0;
-    float realF = 0.0;
-    readZMPT101B(realV, realF);
-
-    lastVoltage = realV;
-    lastFrequency = realF;
-
-    // Add sample to ring buffer
-    addTelemetrySample(realV, realF, millis());
-
-    // Layer 1: Deterministic state machine
-    lastGridStatus = classifyGridStatus(realV, realF);
-
-    // Layer 2: Time-series predictive risk model
-    float dV_dt_10s = 0.0f, dF_dt_10s = 0.0f, v_std_30s = 0.0f, f_std_30s = 0.0f, v_slope_30s = 0.0f;
-    computeRollingFeatures(dV_dt_10s, dF_dt_10s, v_std_30s, f_std_30s, v_slope_30s);
-
-    float rawRisk = 0.0f;
-    if (isRingBufferWarmedUp()) {
-        rawRisk = predictGridRisk(realV, realF, (float)cellSignalDbm, dV_dt_10s, dF_dt_10s, v_std_30s, f_std_30s, v_slope_30s);
-    }
-    lastRiskScore = (uint8_t)constrain((int)rawRisk, 0, 100);
-
-    // Pack 12-byte GridPacket struct
-    GridPacket pkt;
-    pkt.magic = 0x4757;
-    pkt.voltage_x10 = (int16_t)(realV * 10.0f);
-    pkt.freq_x100 = (uint16_t)(realF * 100.0f);
-    pkt.status = (uint8_t)lastGridStatus;
-    pkt.risk_score = lastRiskScore;
-    pkt.ml_version = (uint8_t)CURRENT_VERSION;
-    pkt.rssi = (int8_t)cellSignalDbm;
-    pkt.base_battery = (uint8_t)constrain(batteryPercent, 0, 100);
-    pkt.phone_battery = (int8_t)phoneBatteryPercent;
-
-    if (SERIAL_VERBOSE) {
-      Serial.printf("TX [%lu]: V=%.1f F=%.2f Status=%d Risk=%d%% WarmedUp=%s\n",
-                    packetSequence, realV, realF, (int)lastGridStatus, (int)lastRiskScore, isRingBufferWarmedUp() ? "YES" : "NO");
+    // 1Hz Telemetry Sampling Ticker (independent of 2s LoRa TX interval)
+    // Ensures ring buffer receives 1 sample per second so 10 samples = 10s and 30 samples = 30s
+    static unsigned long lastSampleTime = 0;
+    if (millis() - lastSampleTime >= 1000) {
+      lastSampleTime = millis();
+      float realV = 0.0, realF = 0.0;
+      readZMPT101B(realV, realF);
+      lastVoltage = realV;
+      lastFrequency = realF;
+      addTelemetrySample(realV, realF, millis());
     }
 
-    int state = radio.transmit((uint8_t*)&pkt, sizeof(GridPacket));
+    // Automatic telemetry broadcast every TX_INTERVAL_MS (2 seconds)
+    if (millis() - lastSendTime >= TX_INTERVAL_MS) {
+      lastSendTime = millis();
+      packetSequence++;
+      readBattery();
 
-    if (state == RADIOLIB_ERR_NONE) {
-      if (SERIAL_VERBOSE) Serial.println("  -> OK (10-byte Binary Packet Sent)");
-      lastSuccessfulTx   = millis();
-      consecutiveTxFails = 0;
-      reinitBackoffMs    = 10000;
-      // Short LED blip — TX success
-      digitalWrite(LED_PIN, HIGH);
-      ledOffMs = millis() + LED_TX_MS;
-    } else {
-      Serial.printf("TX FAIL (Code: %d)\n", state);
-      consecutiveTxFails++;
-      // Longer LED pulse — TX error
-      digitalWrite(LED_PIN, HIGH);
-      ledOffMs = millis() + LED_ERR_MS;
+      // Layer 1: Deterministic state machine
+      lastGridStatus = classifyGridStatus(lastVoltage, lastFrequency);
+
+      // Layer 2: Time-series predictive risk model
+      float dV_dt_10s = 0.0f, dF_dt_10s = 0.0f, v_std_30s = 0.0f, f_std_30s = 0.0f, v_slope_30s = 0.0f;
+      computeRollingFeatures(dV_dt_10s, dF_dt_10s, v_std_30s, f_std_30s, v_slope_30s);
+
+      // Clean signal sentinel: map -999 or invalid signals to -120 dBm (prevents int8_t wrap to +25)
+      float modelSignal = (cellSignalDbm < -120 || cellSignalDbm == -999) ? -110.0f : (float)cellSignalDbm;
+      int8_t pktRssi    = (cellSignalDbm < -120 || cellSignalDbm == -999) ? -120 : (int8_t)constrain(cellSignalDbm, -120, 0);
+
+      float rawRisk = 0.0f;
+      if (isRingBufferWarmedUp()) {
+          rawRisk = predictGridRisk(lastVoltage, lastFrequency, modelSignal, dV_dt_10s, dF_dt_10s, v_std_30s, f_std_30s, v_slope_30s);
+      }
+      lastRiskScore = (uint8_t)constrain((int)rawRisk, 0, 100);
+
+      // Pack 12-byte GridPacket struct
+      GridPacket pkt;
+      pkt.magic = 0x4757;
+      pkt.voltage_x10 = (int16_t)(lastVoltage * 10.0f);
+      pkt.freq_x100 = (uint16_t)(lastFrequency * 100.0f);
+      pkt.status = (uint8_t)lastGridStatus;
+      pkt.risk_score = lastRiskScore;
+      pkt.ml_version = (uint8_t)CURRENT_VERSION;
+      pkt.rssi = pktRssi;
+      pkt.base_battery = (uint8_t)constrain(batteryPercent, 0, 100);
+      pkt.phone_battery = (int8_t)phoneBatteryPercent;
+
+      if (SERIAL_VERBOSE) {
+        Serial.printf("TX [%lu]: V=%.1f F=%.2f Status=%d Risk=%d%% WarmedUp=%s RSSI=%d\n",
+                      packetSequence, lastVoltage, lastFrequency, (int)lastGridStatus, (int)lastRiskScore, isRingBufferWarmedUp() ? "YES" : "NO", (int)pktRssi);
+      }
+
+      int state = radio.transmit((uint8_t*)&pkt, sizeof(GridPacket));
+
+      if (state == RADIOLIB_ERR_NONE) {
+        if (SERIAL_VERBOSE) Serial.println("  -> OK (12-byte Binary Packet Sent)");
+        lastSuccessfulTx   = millis();
+        consecutiveTxFails = 0;
+        reinitBackoffMs    = 10000;
+        // Short LED blip — TX success
+        digitalWrite(LED_PIN, HIGH);
+        ledOffMs = millis() + LED_TX_MS;
+      } else {
+        Serial.printf("TX FAIL (Code: %d)\n", state);
+        consecutiveTxFails++;
+        // Longer LED pulse — TX error
+        digitalWrite(LED_PIN, HIGH);
+        ledOffMs = millis() + LED_ERR_MS;
+      }
     }
-  }
 
   // Radio watchdog with exponential backoff reinit
   if (consecutiveTxFails >= MAX_TX_FAILS ||
