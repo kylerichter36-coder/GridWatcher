@@ -6,6 +6,15 @@ echo   GridWatcher 1-Click Installer v2.0
 echo ====================================================
 echo.
 
+where python >nul 2>&1
+if errorlevel 1 (
+    echo [ERROR] Python is not installed or not added to PATH!
+    echo Please install Python 3.10+ and check "Add python.exe to PATH" during setup.
+    echo.
+    pause
+    exit /b 1
+)
+
 REM --- Paths ---
 set "SCRIPT_DIR=%~dp0"
 set "TOOLS_DIR=%SCRIPT_DIR%tools"
@@ -13,7 +22,7 @@ set "CLI_EXE=%TOOLS_DIR%\arduino-cli.exe"
 set "CLI_URL=https://downloads.arduino.cc/arduino-cli/arduino-cli_latest_Windows_64bit.zip"
 set "CLI_ZIP=%TOOLS_DIR%\arduino-cli.zip"
 
-echo [1/5] Installing Python dependencies...
+echo [1/5] Installing Python dependencies (PyQt5, pandas, scikit-learn, numpy, paramiko)...
 python -m pip install PyQt5 pandas scikit-learn numpy paramiko --quiet
 if errorlevel 1 (
     python -m pip install PyQt6 pandas scikit-learn numpy paramiko --quiet
@@ -21,13 +30,13 @@ if errorlevel 1 (
 echo        Done.
 echo.
 
-echo [2/5] Checking for arduino-cli...
+echo [2/5] Checking for standalone arduino-cli compiler...
 if exist "%CLI_EXE%" (
     echo        arduino-cli already present at: %CLI_EXE%
     goto :boards
 )
 
-echo        Not found. Downloading arduino-cli standalone...
+echo        Not found. Downloading standalone arduino-cli...
 if not exist "%TOOLS_DIR%" mkdir "%TOOLS_DIR%"
 
 REM Download arduino-cli using PowerShell
@@ -51,7 +60,7 @@ echo        arduino-cli downloaded to: %CLI_EXE%
 echo.
 
 :boards
-echo [3/5] Installing ESP32 board core (this may take 2-3 minutes)...
+echo [3/5] Installing ESP32 board core...
 "%CLI_EXE%" config init --overwrite >nul 2>&1
 "%CLI_EXE%" config add board_manager.additional_urls https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json >nul 2>&1
 
@@ -60,7 +69,7 @@ echo [3/5] Installing ESP32 board core (this may take 2-3 minutes)...
 echo        ESP32 board core installed.
 echo.
 
-echo [4/6] Installing required Arduino libraries...
+echo [4/5] Installing required Arduino libraries (RadioLib, Adafruit GFX/ST7789/BusIO)...
 "%CLI_EXE%" lib install "RadioLib" 2>&1
 "%CLI_EXE%" lib install "Adafruit GFX Library" 2>&1
 "%CLI_EXE%" lib install "Adafruit ST7735 and ST7789 Library" 2>&1
@@ -68,7 +77,7 @@ echo [4/6] Installing required Arduino libraries...
 echo        Arduino libraries installed.
 echo.
 
-echo [5/6] Registering GridWatcher in Windows Startup...
+echo [5/5] Registering GridWatcher in Windows Startup...
 set "TARGET_DIR=%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup"
 set "SCRIPT_PATH=%SCRIPT_DIR%gridwatcher_ml_gui.py"
 set "VBS_PATH=%TARGET_DIR%\GridWatcherML.vbs"
@@ -79,12 +88,12 @@ echo        Startup entry registered.
 echo.
 
 echo ====================================================
-echo   [6/6] INSTALL COMPLETE!
+echo   INSTALLATION COMPLETE!
 echo ====================================================
-echo   arduino-cli : %CLI_EXE%
+echo   Compiler    : %CLI_EXE%
 echo   Python deps : PyQt5, pandas, scikit-learn, numpy, paramiko
-echo   ESP32 core  : installed
-echo   Libraries   : RadioLib, Adafruit GFX, Adafruit ST7789
+echo   ESP32 core  : esp32:esp32 installed
+echo   Libraries   : RadioLib, Adafruit GFX, ST7789, BusIO
 echo   Startup     : registered
 echo.
 echo   You can now double-click gridwatcher_ml_gui.py to run!
