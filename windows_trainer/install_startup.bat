@@ -60,7 +60,14 @@ echo [3/5] Installing ESP32 board core (this may take 2-3 minutes)...
 echo        ESP32 board core installed.
 echo.
 
-echo [4/5] Registering GridWatcher in Windows Startup...
+echo [4/5] Installing required Arduino libraries...
+"%CLI_EXE%" lib install "RadioLib" 2>&1
+"%CLI_EXE%" lib install "Adafruit GFX Library" 2>&1
+"%CLI_EXE%" lib install "Adafruit ST7735 and ST7789 Library" 2>&1
+echo        Arduino libraries installed.
+echo.
+
+echo [5/6] Registering GridWatcher in Windows Startup...
 set "TARGET_DIR=%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup"
 set "SCRIPT_PATH=%SCRIPT_DIR%gridwatcher_ml_gui.py"
 set "VBS_PATH=%TARGET_DIR%\GridWatcherML.vbs"
@@ -71,11 +78,12 @@ echo        Startup entry registered.
 echo.
 
 echo ====================================================
-echo   [5/5] INSTALL COMPLETE!
+echo   [6/6] INSTALL COMPLETE!
 echo ====================================================
 echo   arduino-cli : %CLI_EXE%
 echo   Python deps : PyQt5, pandas, scikit-learn, numpy, paramiko
 echo   ESP32 core  : installed
+echo   Libraries   : RadioLib, Adafruit GFX, Adafruit ST7789
 echo   Startup     : registered
 echo.
 echo   You can now double-click gridwatcher_ml_gui.py to run!
