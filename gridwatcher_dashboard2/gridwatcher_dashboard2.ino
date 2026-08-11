@@ -27,6 +27,27 @@
 #include <HTTPClient.h>
 #include "wallpaper.h"
 
+enum GridStatus : uint8_t {
+    GRID_STATUS_NORMAL       = 0,
+    GRID_STATUS_BLACKOUT     = 1,
+    GRID_STATUS_BROWNOUT_SAG = 2,
+    GRID_STATUS_SURGE        = 3,
+    GRID_STATUS_FREQ_JITTER  = 4
+};
+
+struct __attribute__((packed)) GridPacket {
+    uint16_t magic = 0x4757;  // 2 Bytes: 'GW' Sync Header
+    int16_t  voltage_x10;     // 2 Bytes: e.g. 2301 = 230.1V
+    uint16_t freq_x100;       // 2 Bytes: e.g. 5000 = 50.00Hz
+    uint8_t  status;          // 1 Byte: GridStatus Enum (0..4)
+    uint8_t  risk_score;      // 1 Byte: Predictive Risk % (0..100)
+    uint8_t  ml_version;      // 1 Byte: Model Version
+    int8_t   rssi;            // 1 Byte: Cell Signal dBm
+};
+
+uint8_t currentGridStatus = 0;
+uint8_t currentRiskScore = 0;
+
 // WiFi OTA — connects to sender AP and pulls firmware from sender hub
 const char* otaSSID = "GridWatcher-Home";  // sender AP
 const char* otaPass = "gridwatcher123";
@@ -798,51 +819,28 @@ void loop() {
 
     if (state == RADIOLIB_ERR_NONE) {
 
-      int vIdx   = str.indexOf("V:");
-      int fIdx   = str.indexOf(",F:");
-      int bIdx   = str.indexOf(",B:");
-      int cellIdx= str.indexOf(",S:");
-      int pbIdx  = str.indexOf(",PB:");
-      int sIdx   = str.indexOf(",SEQ:");
-      int mlIdx  = str.indexOf(",ML:");
+    size_t len = radio.getPacketLength();
+    if (len == sizeof(GridPacket)) {
+      GridPacket pkt;
+      int state = radio.readData((uint8_t*)&pkt, sizeof(GridPacket));
+      if (state == RADIOLIB_ERR_NONE) {
+        // Explicit Magic Header Validation (0x4757) — reject if mismatch
+        if (pkt.magic != 0x4757) {
+          Serial.println("[LoRa RX] Rejected packet: Invalid magic header!");
+          return;
+        }
 
-      if (vIdx >= 0 && fIdx > vIdx && sIdx > fIdx) {
         packetsReceivedThisSecond++;
         lastPacketMillis = millis();
 
-        voltage  = str.substring(vIdx + 2, fIdx).toFloat();
-        freq_Hz  = str.substring(fIdx + 3, (bIdx > fIdx ? bIdx : sIdx)).toFloat();
+        voltage  = pkt.voltage_x10 / 10.0f;
+        freq_Hz  = pkt.freq_x100 / 100.0f;
+        currentGridStatus = pkt.status;
+        currentRiskScore = pkt.risk_score;
+        mlVersion = pkt.ml_version;
+        cellSignalDbm = pkt.rssi;
 
-        if (bIdx > fIdx) {
-          int bEnd = (cellIdx > bIdx) ? cellIdx : sIdx;
-          homeBatteryPercent = str.substring(bIdx + 3, bEnd).toInt();
-        }
-        if (cellIdx > fIdx) {
-          int sEnd = (pbIdx > cellIdx) ? pbIdx : sIdx;
-          cellSignalDbm = str.substring(cellIdx + 3, sEnd).toInt();
-        }
-        if (pbIdx > 0 && sIdx > pbIdx) {
-          phoneBatteryPercent = str.substring(pbIdx + 4, sIdx).toInt();
-        }
-
-        // Parse ML version from packet (live update from Base Station)
-        if (mlIdx > sIdx) {
-          int newML = str.substring(mlIdx + 4).toInt();
-          if (newML > 0) mlVersion = newML;
-        }
-
-        unsigned long seq = str.substring(sIdx + 5, mlIdx > sIdx ? mlIdx : str.length()).toInt();
-        if (lastExpectedSeq != 0 && seq > lastExpectedSeq) {
-          totalLostPackets += (seq - lastExpectedSeq);
-        }
         totalExpectedPackets++;
-        lastExpectedSeq = seq + 1;
-
-        if (totalExpectedPackets > 0) {
-          pktLoss = ((float)totalLostPackets /
-                     (float)(totalExpectedPackets + totalLostPackets)) * 100.0;
-        }
-
         rssi_dBm = (int)radio.getRSSI();
         snr_dB   = radio.getSNR();
 
@@ -856,8 +854,9 @@ void loop() {
         aiFreqHist[aiHistIdx] = freq_Hz;
         aiHistIdx = (aiHistIdx + 1) % AI_HIST_LEN;
 
-        // Signal that fresh data is ready — display will draw after DRAW_DELAY_MS
-        newDataFlag   = true;
+        newDataFlag = true;
+      }
+    }
         dataReceivedMs = millis();
       }
     } // end state == RADIOLIB_ERR_NONE (parse block)

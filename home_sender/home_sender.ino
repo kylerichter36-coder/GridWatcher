@@ -270,8 +270,102 @@ const char* apPass   = "gridwatcher123";
 WebServer server(80);
 
 // ==============================================================================
-// [3] GLOBALS & STATE
+// [3] GLOBALS, PACKET STRUCT & FEATURE CALCULATOR
 // ==============================================================================
+struct __attribute__((packed)) GridPacket {
+    uint16_t magic = 0x4757;  // 2 Bytes: 'GW' Sync Header
+    int16_t  voltage_x10;     // 2 Bytes: e.g. 2301 = 230.1V
+    uint16_t freq_x100;       // 2 Bytes: e.g. 5000 = 50.00Hz
+    uint8_t  status;          // 1 Byte: GridStatus Enum (0..4)
+    uint8_t  risk_score;      // 1 Byte: Predictive Risk % (0..100)
+    uint8_t  ml_version;      // 1 Byte: Model Version
+    int8_t   rssi;            // 1 Byte: Cell Signal dBm
+};
+
+struct TelemetrySample {
+    float voltage;
+    float frequency;
+    unsigned long timestamp_ms;
+};
+
+#define RING_BUF_SIZE 30
+TelemetrySample ringBuf[RING_BUF_SIZE];
+int ringHead = 0;
+int sampleCount = 0;
+
+void addTelemetrySample(float v, float f, unsigned long ts) {
+    ringBuf[ringHead] = {v, f, ts};
+    ringHead = (ringHead + 1) % RING_BUF_SIZE;
+    if (sampleCount < RING_BUF_SIZE) sampleCount++;
+}
+
+bool isRingBufferWarmedUp() {
+    return sampleCount >= RING_BUF_SIZE;
+}
+
+// Layer 1: Strict Evaluation Precedence State Machine
+GridStatus classifyGridStatus(float voltage, float frequency) {
+    // 1. BLACKOUT (Highest Severity)
+    if (voltage < 180.0f || frequency < 45.00f) {
+        return GRID_STATUS_BLACKOUT;
+    }
+    // 2. SURGE
+    if (voltage > 250.0f) {
+        return GRID_STATUS_SURGE;
+    }
+    // 3. BROWNOUT SAG
+    if (voltage >= 180.0f && voltage < 210.0f) {
+        return GRID_STATUS_BROWNOUT_SAG;
+    }
+    // 4. FREQUENCY JITTER (Voltage normal 210V-250V, but frequency outside 49.5-50.5Hz)
+    if (voltage >= 210.0f && voltage <= 250.0f && (frequency < 49.50f || frequency > 50.50f)) {
+        return GRID_STATUS_FREQ_JITTER;
+    }
+    // 5. NORMAL (Lowest Severity)
+    return GRID_STATUS_NORMAL;
+}
+
+void computeRollingFeatures(float &dV_dt_10s, float &dF_dt_10s, float &v_std_30s, float &f_std_30s, float &v_slope_30s) {
+    if (!isRingBufferWarmedUp()) {
+        dV_dt_10s = 0.0f; dF_dt_10s = 0.0f; v_std_30s = 0.0f; f_std_30s = 0.0f; v_slope_30s = 0.0f;
+        return;
+    }
+
+    int idxNow = (ringHead - 1 + RING_BUF_SIZE) % RING_BUF_SIZE;
+    int idx10s = (ringHead - 10 + RING_BUF_SIZE) % RING_BUF_SIZE;
+
+    dV_dt_10s = (ringBuf[idxNow].voltage - ringBuf[idx10s].voltage) / 10.0f;
+    dF_dt_10s = (ringBuf[idxNow].frequency - ringBuf[idx10s].frequency) / 10.0f;
+
+    float vSum = 0.0f, fSum = 0.0f;
+    for (int i = 0; i < RING_BUF_SIZE; i++) {
+        vSum += ringBuf[i].voltage;
+        fSum += ringBuf[i].frequency;
+    }
+    float vMean = vSum / 30.0f;
+    float fMean = fSum / 30.0f;
+
+    float vSqDiff = 0.0f, fSqDiff = 0.0f;
+    float num = 0.0f, den = 0.0f;
+    float tMean = 14.5f;
+
+    for (int i = 0; i < RING_BUF_SIZE; i++) {
+        int idx = (ringHead - 30 + i + RING_BUF_SIZE) % RING_BUF_SIZE;
+        float vDiff = ringBuf[idx].voltage - vMean;
+        float fDiff = ringBuf[idx].frequency - fMean;
+        vSqDiff += vDiff * vDiff;
+        fSqDiff += fDiff * fDiff;
+
+        float tDiff = i - tMean;
+        num += tDiff * vDiff;
+        den += tDiff * tDiff;
+    }
+
+    v_std_30s = sqrt(vSqDiff / 30.0f);
+    f_std_30s = sqrt(fSqDiff / 30.0f);
+    v_slope_30s = (den > 0.0001f) ? (num / den) : 0.0f;
+}
+
 SX1262 radio = new Module(LORA_CS, LORA_DIO1, LORA_RST, LORA_BUSY);
 
 int cellSignalDbm     = -999;
@@ -280,14 +374,16 @@ unsigned long lastCellUpdate = 0;
 unsigned long lastSendTime   = 0;
 unsigned long packetSequence = 0;
 int batteryPercent = 100;
+GridStatus lastGridStatus = GRID_STATUS_NORMAL;
+uint8_t lastRiskScore = 0;
 
 // Radio health tracking
 unsigned long lastSuccessfulTx  = 0;
 int consecutiveTxFails          = 0;
-unsigned long reinitBackoffMs   = 10000; // Starts at 10s, doubles on each fail
+unsigned long reinitBackoffMs   = 10000;
 unsigned long lastReinitAttempt = 0;
 #define MAX_TX_FAILS     5
-#define MAX_BACKOFF_MS   80000   // Cap backoff at 80 seconds
+#define MAX_BACKOFF_MS   80000
 
 // Pre-allocated payload buffer — zero heap allocation
 char payload[128];
@@ -825,18 +921,41 @@ void loop() {
     lastVoltage = realV;
     lastFrequency = realF;
 
-    snprintf(payload, sizeof(payload),
-      "V:%.1f,F:%.2f,B:%d,S:%d,PB:%d,SEQ:%lu,ML:%d",
-      realV, realF, batteryPercent, cellSignalDbm, phoneBatteryPercent, packetSequence, CURRENT_VERSION);
+    // Add sample to ring buffer
+    addTelemetrySample(realV, realF, millis());
+
+    // Layer 1: Deterministic state machine
+    lastGridStatus = classifyGridStatus(realV, realF);
+
+    // Layer 2: Time-series predictive risk model
+    float dV_dt_10s = 0.0f, dF_dt_10s = 0.0f, v_std_30s = 0.0f, f_std_30s = 0.0f, v_slope_30s = 0.0f;
+    computeRollingFeatures(dV_dt_10s, dF_dt_10s, v_std_30s, f_std_30s, v_slope_30s);
+
+    float rawRisk = 0.0f;
+    if (isRingBufferWarmedUp()) {
+        rawRisk = predictGridRisk(realV, realF, (float)cellSignalDbm, dV_dt_10s, dF_dt_10s, v_std_30s, f_std_30s, v_slope_30s);
+    }
+    lastRiskScore = (uint8_t)constrain((int)rawRisk, 0, 100);
+
+    // Pack 10-byte GridPacket struct
+    GridPacket pkt;
+    pkt.magic = 0x4757;
+    pkt.voltage_x10 = (int16_t)(realV * 10.0f);
+    pkt.freq_x100 = (uint16_t)(realF * 100.0f);
+    pkt.status = (uint8_t)lastGridStatus;
+    pkt.risk_score = lastRiskScore;
+    pkt.ml_version = (uint8_t)CURRENT_VERSION;
+    pkt.rssi = (int8_t)cellSignalDbm;
 
     if (SERIAL_VERBOSE) {
-      Serial.printf("TX [%lu]: %s\n", packetSequence, payload);
+      Serial.printf("TX [%lu]: V=%.1f F=%.2f Status=%d Risk=%d%% WarmedUp=%s\n",
+                    packetSequence, realV, realF, (int)lastGridStatus, (int)lastRiskScore, isRingBufferWarmedUp() ? "YES" : "NO");
     }
 
-    int state = radio.transmit(payload);
+    int state = radio.transmit((uint8_t*)&pkt, sizeof(GridPacket));
 
     if (state == RADIOLIB_ERR_NONE) {
-      if (SERIAL_VERBOSE) Serial.println("  -> OK");
+      if (SERIAL_VERBOSE) Serial.println("  -> OK (10-byte Binary Packet Sent)");
       lastSuccessfulTx   = millis();
       consecutiveTxFails = 0;
       reinitBackoffMs    = 10000;

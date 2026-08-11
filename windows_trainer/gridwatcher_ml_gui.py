@@ -119,21 +119,57 @@ class RetrainerWorker(QThread):
             df = pd.read_csv(LOCAL_CSV_PATH)
             self.log_signal.emit(f"       [DATA] Loaded {len(df)} telemetry samples.")
 
-            # Step 2: Scikit-Learn ML Training
+            # Compute rolling features with gap detection (timestamp delta > 2s invalidates window)
+            if "timestamp" in df.columns:
+                ts_dt = pd.to_datetime(df["timestamp"], errors="coerce")
+                dt = ts_dt.diff().dt.total_seconds().fillna(1.0)
+            else:
+                dt = pd.Series(1.0, index=df.index)
+
+            # Mask non-consecutive timestamp gaps
+            gap_mask = dt > 2.0
+
+            # 10s fast transient rate of change
+            df["dV_dt_10s"] = (df["voltage"] - df["voltage"].shift(10)) / 10.0
+            df["dF_dt_10s"] = (df["frequency"] - df["frequency"].shift(10)) / 10.0
+            df.loc[gap_mask.rolling(10, min_periods=1).max() > 0, ["dV_dt_10s", "dF_dt_10s"]] = 0.0
+
+            # 30s rolling standard deviation & trend slope
+            df["v_std_30s"] = df["voltage"].rolling(30, min_periods=30).std()
+            df["f_std_30s"] = df["frequency"].rolling(30, min_periods=30).std()
+            
+            # Simple 30s linear slope estimation
+            df["v_slope_30s"] = (df["voltage"] - df["voltage"].shift(30)) / 30.0
+            df.loc[gap_mask.rolling(30, min_periods=1).max() > 0, ["v_std_30s", "f_std_30s", "v_slope_30s"]] = 0.0
+
+            # Fill initial window startup NaNs with 0.0
+            df = df.fillna(0.0)
+
+            # Continuous 0-30s forward-looking predictive target labeling
+            # Label = 1 if an anomaly (V < 210V or V > 250V or F outside 49.5-50.5Hz) occurs in t+1..t+30 while current t is NORMAL
+            is_anomaly = (df["voltage"] < 210.0) | (df["voltage"] > 250.0) | (df["frequency"] < 49.5) | (df["frequency"] > 50.5)
+            is_normal_now = (df["voltage"] >= 210.0) & (df["voltage"] <= 250.0) & (df["frequency"] >= 49.5) & (df["frequency"] <= 50.5)
+            
+            # Shift backwards to see if an anomaly occurs anywhere in the future 1..30 samples
+            future_anomaly = is_anomaly.iloc[::-1].rolling(30, min_periods=1).max().iloc[::-1].shift(-1).fillna(0) > 0
+            df["target_risk"] = np.where(is_normal_now & future_anomaly, 1, 0)
+
+            # Step 2: Scikit-Learn Random Forest 3-Tree Training
             self.progress_signal.emit(35, "Step 2/6: Training Random Forest Classifier...")
-            self.log_signal.emit("[2/6] Retraining Random Forest Classifier...")
+            self.log_signal.emit("[2/6] Training Random Forest Ensemble (3 trees, max_depth=4)...")
             
-            X = df[["voltage", "frequency", "cell_signal"]]
-            y = df["outage_label"]
+            feature_cols = ["voltage", "frequency", "cell_signal", "dV_dt_10s", "dF_dt_10s", "v_std_30s", "f_std_30s", "v_slope_30s"]
+            X = df[feature_cols]
+            y = df["target_risk"]
             
-            clf = RandomForestClassifier(n_estimators=10, max_depth=4, random_state=int(time.time()) % 1000)
+            clf = RandomForestClassifier(n_estimators=3, max_depth=4, random_state=42)
             clf.fit(X, y)
             acc = clf.score(X, y) * 100
             self.log_signal.emit(f"       [SUCCESS] Model Accuracy = {acc:.2f}%")
 
-            # Step 3: Export C++ Weights & Increment Version
-            self.progress_signal.emit(55, "Step 3/6: Exporting decision weights...")
-            self.log_signal.emit("[3/6] Exporting C++ decision weights to grid_model.h...")
+            # Step 3: Export C++ Random Forest Code & Increment Version
+            self.progress_signal.emit(55, "Step 3/6: Exporting C++ tree code...")
+            self.log_signal.emit("[3/6] Exporting C++ decision trees to grid_model.h...")
 
             new_version = 2
             if os.path.exists(VERSION_JSON_PATH):
@@ -145,12 +181,44 @@ class RetrainerWorker(QThread):
 
             build_time = time.strftime('%Y-%m-%d %H:%M:%S')
 
-            header_code = f"""// Auto-generated GridWatcher ML Model Decision Weights
+            cpp_feature_names = ["voltage", "frequency", "signal", "dV_dt_10s", "dF_dt_10s", "v_std_30s", "f_std_30s", "v_slope_30s"]
+
+            def export_tree_to_cpp(tree_estimator, tree_idx):
+                tree_ = tree_estimator.tree_
+                def recurse(node, depth):
+                    indent = "  " * depth
+                    if tree_.feature[node] != -2:
+                        name = cpp_feature_names[tree_.feature[node]]
+                        threshold = tree_.threshold[node]
+                        left = recurse(tree_.children_left[node], depth + 1)
+                        right = recurse(tree_.children_right[node], depth + 1)
+                        return f"{indent}if ({name} <= {threshold:.4f}f) {{\n{left}\n{indent}}} else {{\n{right}\n{indent}}}"
+                    else:
+                        vals = tree_.value[node][0]
+                        prob = float(vals[1] / np.sum(vals)) if np.sum(vals) > 0 else 0.0
+                        return f"{indent}return {prob:.4f}f;"
+
+                body = recurse(0, 1)
+                return f"inline float tree{tree_idx}(float voltage, float frequency, float signal, float dV_dt_10s, float dF_dt_10s, float v_std_30s, float f_std_30s, float v_slope_30s) {{\n{body}\n}}"
+
+            cpp_trees = "\n\n".join([export_tree_to_cpp(t, i) for i, t in enumerate(clf.estimators_)])
+
+            header_code = f"""// Auto-generated GridWatcher Random Forest ML Decision Trees
 // Retrained on: {build_time}
 // Accuracy: {acc:.2f}%
 
 #ifndef GRID_MODEL_H
 #define GRID_MODEL_H
+
+#include <Arduino.h>
+
+enum GridStatus : uint8_t {{
+    GRID_STATUS_NORMAL       = 0,
+    GRID_STATUS_BLACKOUT     = 1,
+    GRID_STATUS_BROWNOUT_SAG = 2,
+    GRID_STATUS_SURGE        = 3,
+    GRID_STATUS_FREQ_JITTER  = 4
+}};
 
 #ifndef ML_MODEL_VERSION
 #define ML_MODEL_VERSION {new_version}
@@ -164,14 +232,14 @@ class RetrainerWorker(QThread):
 #define ML_MODEL_ACCURACY "{acc:.2f}%"
 #endif
 
-inline float predictGridRisk(float voltage, float frequency, float signal) {{
-    if (voltage < 180.0f || frequency < 48.5f || frequency > 51.5f) {{
-        return 99.9f;
-    }} else if (voltage < 210.0f || frequency < 49.5f) {{
-        return 65.0f;
-    }} else {{
-        return 2.5f;
-    }}
+{cpp_trees}
+
+inline float predictGridRisk(float voltage, float frequency, float signal, float dV_dt_10s, float dF_dt_10s, float v_std_30s, float f_std_30s, float v_slope_30s) {{
+    float p0 = tree0(voltage, frequency, signal, dV_dt_10s, dF_dt_10s, v_std_30s, f_std_30s, v_slope_30s);
+    float p1 = tree1(voltage, frequency, signal, dV_dt_10s, dF_dt_10s, v_std_30s, f_std_30s, v_slope_30s);
+    float p2 = tree2(voltage, frequency, signal, dV_dt_10s, dF_dt_10s, v_std_30s, f_std_30s, v_slope_30s);
+    float avgProb = (p0 + p1 + p2) / 3.0f;
+    return avgProb * 100.0f;
 }}
 
 #endif // GRID_MODEL_H
