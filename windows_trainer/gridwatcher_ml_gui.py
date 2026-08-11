@@ -171,11 +171,8 @@ inline float predictGridRisk(float voltage, float frequency, float signal) {{
                 ("handheld",    handheld_ino, "gridwatcher_dashboard2.ino.bin"),
             ]:
                 self.log_signal.emit(f"       [BUILD] Compiling {label}...")
-                result = subprocess.run(
-                    [ARDUINO_CLI, "compile", "--fqbn", FQBN,
-                     "--output-dir", BUILD_DIR, ino_path],
-                    capture_output=True, text=True, timeout=300, cwd=REPO_DIR
-                )
+                compile_cmd = f'"{ARDUINO_CLI}" compile --fqbn {FQBN} --output-dir "{BUILD_DIR}" "{ino_path}"'
+                result = subprocess.run(compile_cmd, capture_output=True, text=True, timeout=300, cwd=REPO_DIR, shell=True)
                 if result.returncode == 0:
                     src = os.path.join(BUILD_DIR, out_name)
                     dst_name = "home_sender.bin" if label == "home_sender" else "handheld.bin"
