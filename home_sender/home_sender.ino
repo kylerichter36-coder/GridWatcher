@@ -30,20 +30,18 @@
 #include "grid_model.h"
 
 #define CURRENT_VERSION ML_MODEL_VERSION
-const char* OTA_VERSION_URL      = "https://raw.githubusercontent.com/kylerichter36-coder/GridWatcher/main/version.json";
-const char* OTA_BIN_URL          = "https://raw.githubusercontent.com/kylerichter36-coder/GridWatcher/main/home_sender.bin";
-const char* OTA_HANDHELD_BIN_URL = "https://raw.githubusercontent.com/kylerichter36-coder/GridWatcher/main/handheld.bin";
+const char* OTA_VERSION_URL      = "http://192.168.3.47:5000/api/firmware/version.json";
+const char* OTA_BIN_URL          = "http://192.168.3.47:5000/api/firmware/home_sender.bin";
+const char* OTA_HANDHELD_BIN_URL = "http://192.168.3.47:5000/api/firmware/handheld.bin";
 
 bool handheldUpdateReady = false;   // handheld.bin uploaded and waiting
 
-// GitHub Direct HTTPS Auto-OTA Self-Flashing Engine
+// GitHub Direct HTTP Auto-OTA Self-Flashing Engine (via Orange Pi local server)
 void checkGitHubAutoOTA() {
   if (WiFi.status() != WL_CONNECTED) return;
-  Serial.println("[Auto-OTA] Checking GitHub for firmware and ML model updates...");
+  Serial.println("[Auto-OTA] Checking Orange Pi for firmware updates...");
   
-  WiFiClientSecure client;
-  client.setInsecure(); // Bypass SSL certificate verification for GitHub raw CDN
-  
+  WiFiClient client;  // Plain HTTP — no SSL needed for local server
   HTTPClient http;
   if (http.begin(client, OTA_VERSION_URL)) {
     int httpCode = http.GET();
@@ -60,9 +58,10 @@ void checkGitHubAutoOTA() {
         Serial.println("[Auto-OTA] NEW FIRMWARE / ML MODEL VERSION DETECTED ON GITHUB!");
         
         // 1. Stage handheld.bin for handheld unit in LittleFS
-        Serial.println("[Auto-OTA] Downloading handheld.bin for handheld unit...");
+        Serial.println("[Auto-OTA] Downloading handheld.bin from Orange Pi...");
         HTTPClient httpHandheld;
-        if (httpHandheld.begin(client, OTA_HANDHELD_BIN_URL)) {
+        WiFiClient hClient;
+        if (httpHandheld.begin(hClient, OTA_HANDHELD_BIN_URL)) {
           int hCode = httpHandheld.GET();
           if (hCode == HTTP_CODE_OK) {
             File hFile = LittleFS.open("/handheld.bin", "w");
@@ -77,9 +76,10 @@ void checkGitHubAutoOTA() {
         }
 
         // 2. Download home_sender.bin and self-flash sender
-        Serial.println("[Auto-OTA] Downloading home_sender.bin and self-flashing over HTTPS...");
+        Serial.println("[Auto-OTA] Downloading home_sender.bin from Orange Pi and self-flashing...");
         HTTPClient httpBin;
-        if (httpBin.begin(client, OTA_BIN_URL)) {
+        WiFiClient bClient;
+        if (httpBin.begin(bClient, OTA_BIN_URL)) {
           int binCode = httpBin.GET();
           if (binCode == HTTP_CODE_OK) {
             int contentLength = httpBin.getSize();
@@ -730,9 +730,8 @@ void setup() {
       server.send(503, "text/plain", "No home WiFi — cannot reach GitHub");
       return;
     }
-    server.send(200, "text/plain", "Fetching handheld.bin from GitHub...");
-    WiFiClientSecure ghClient;
-    ghClient.setInsecure();
+    server.send(200, "text/plain", "Fetching handheld.bin from Orange Pi...");
+    WiFiClient ghClient;
     HTTPClient ghHttp;
     if (ghHttp.begin(ghClient, OTA_HANDHELD_BIN_URL)) {
       int code = ghHttp.GET();

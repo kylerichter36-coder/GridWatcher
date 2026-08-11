@@ -224,6 +224,30 @@ inline float predictGridRisk(float voltage, float frequency, float signal) {{
 
             self.log_signal.emit(f"       [GIT SUCCESS] Pushed commit '{commit_msg}' to GitHub main branch.")
 
+            # Step 5b: Upload compiled binaries to Orange Pi firmware server (HTTP OTA source)
+            self.progress_signal.emit(92, "Step 5b/6: Uploading firmware to Orange Pi server...")
+            self.log_signal.emit("[5b/6] Uploading firmware files to Orange Pi local server...")
+            try:
+                import paramiko
+                pi_ssh = paramiko.SSHClient()
+                pi_ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+                pi_ssh.connect(ORANGE_PI_IP, username="root", password="1234", timeout=10)
+                pi_sftp = pi_ssh.open_sftp()
+                fw_files = {
+                    os.path.join(REPO_DIR, "home_sender.bin"): "/root/gridwatcher/firmware/home_sender.bin",
+                    os.path.join(REPO_DIR, "handheld.bin"):    "/root/gridwatcher/firmware/handheld.bin",
+                    os.path.join(REPO_DIR, "version.json"):    "/root/gridwatcher/firmware/version.json",
+                }
+                for local, remote in fw_files.items():
+                    if os.path.exists(local):
+                        pi_sftp.put(local, remote)
+                        self.log_signal.emit(f"       [SCP] {os.path.basename(local)} -> Pi ({os.path.getsize(local):,} bytes)")
+                pi_sftp.close()
+                pi_ssh.close()
+                self.log_signal.emit("       [SUCCESS] All firmware files on Orange Pi server — ESP32 can now download via HTTP!")
+            except Exception as scp_err:
+                self.log_signal.emit(f"       [WARN] Orange Pi SCP failed: {scp_err}. OTA will use cached files.")
+
             # Step 6: Send ESP32 Auto-OTA Trigger Signal (ONLY IF GIT PUSH SUCCEEDED)
             self.progress_signal.emit(95, "Step 6/6: Triggering ESP32 Auto-OTA over Wi-Fi...")
             self.log_signal.emit("[6/6] Sending OTA trigger signal to ESP32 (192.168.3.45)...")
