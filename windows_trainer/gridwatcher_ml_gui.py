@@ -20,15 +20,11 @@ ORANGE_PI_IP = "192.168.3.47"
 ESP32_IP = "192.168.3.45"
 TELEMETRY_URL = f"http://{ORANGE_PI_IP}:5000/api/telemetry.csv"
 TRIGGER_OTA_URL = f"http://{ESP32_IP}/trigger-ota"
-STAGE_HANDHELD_URL = f"http://{ESP32_IP}/stage-handheld"
 LOCAL_CSV_PATH = os.path.join(os.path.dirname(__file__), "telemetry.csv")
 MODEL_HEADER_PATH = os.path.join(os.path.dirname(__file__), "..", "home_sender", "grid_model.h")
 VERSION_JSON_PATH = os.path.join(os.path.dirname(__file__), "..", "version.json")
 REPO_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 GIT_REMOTE_URL = "https://github.com/kylerichter36-coder/GridWatcher.git"
-ARDUINO_CLI = r"C:\Program Files\Arduino IDE\resources\app\lib\backend\resources\arduino-cli.exe"
-FQBN = "esp32:esp32:dfrobot_firebeetle2_esp32c6:CDCOnBoot=cdc"
-BUILD_DIR = os.path.join(REPO_DIR, "build")
 
 class RetrainerWorker(QThread):
     progress_signal = pyqtSignal(int, str)
@@ -78,38 +74,16 @@ class RetrainerWorker(QThread):
             acc = clf.score(X, y) * 100
             self.log_signal.emit(f"       [SUCCESS] Model Accuracy = {acc:.2f}%")
 
-            # Step 3: Export C++ Weights & Increment Version
+            # Step 3: Export C++ Weights
             self.progress_signal.emit(55, "Step 3/6: Exporting decision weights...")
             self.log_signal.emit("[3/6] Exporting C++ decision weights to grid_model.h...")
-
-            new_version = 2
-            if os.path.exists(VERSION_JSON_PATH):
-                try:
-                    with open(VERSION_JSON_PATH, "r") as vf:
-                        new_version = json.load(vf).get("version", 1) + 1
-                except:
-                    new_version = 2
-
-            build_time = time.strftime('%Y-%m-%d %H:%M:%S')
-
+            
             header_code = f"""// Auto-generated GridWatcher ML Model Decision Weights
-// Retrained on: {build_time}
+// Retrained on: {time.strftime('%Y-%m-%d %H:%M:%S')}
 // Accuracy: {acc:.2f}%
 
 #ifndef GRID_MODEL_H
 #define GRID_MODEL_H
-
-#ifndef ML_MODEL_VERSION
-#define ML_MODEL_VERSION {new_version}
-#endif
-
-#ifndef ML_MODEL_BUILD_TIME
-#define ML_MODEL_BUILD_TIME "{build_time}"
-#endif
-
-#ifndef ML_MODEL_ACCURACY
-#define ML_MODEL_ACCURACY "{acc:.2f}%"
-#endif
 
 inline float predictGridRisk(float voltage, float frequency, float signal) {{
     if (voltage < 180.0f || frequency < 48.5f || frequency > 51.5f) {{
@@ -126,46 +100,25 @@ inline float predictGridRisk(float voltage, float frequency, float signal) {{
             os.makedirs(os.path.dirname(MODEL_HEADER_PATH), exist_ok=True)
             with open(MODEL_HEADER_PATH, "w") as f:
                 f.write(header_code)
-            self.log_signal.emit(f"       [SUCCESS] Decision weights exported to grid_model.h (v{new_version}).")
+            self.log_signal.emit("       [SUCCESS] Decision weights exported to grid_model.h.")
 
             # Step 4: Increment Version
             self.progress_signal.emit(75, "Step 4/6: Updating version.json...")
             self.log_signal.emit("[4/6] Updating version.json...")
             
-            v_data = {"version": new_version, "build_time": build_time}
+            v_data = {"version": 1, "build_time": time.strftime("%Y-%m-%d %H:%M:%S")}
+            if os.path.exists(VERSION_JSON_PATH):
+                try:
+                    with open(VERSION_JSON_PATH, "r") as vf:
+                        v_data = json.load(vf)
+                        v_data["version"] = v_data.get("version", 1) + 1
+                        v_data["build_time"] = time.strftime("%Y-%m-%d %H:%M:%S")
+                except:
+                    v_data["version"] = 2
+            
             with open(VERSION_JSON_PATH, "w") as vf:
                 json.dump(v_data, vf, indent=2)
             self.log_signal.emit(f"       [SUCCESS] Version incremented to v{v_data['version']}")
-
-            # Step 4b: Compile firmware binaries with arduino-cli
-            self.progress_signal.emit(80, "Step 4b/6: Compiling firmware binaries...")
-            self.log_signal.emit("[4b/6] Compiling home_sender.bin and handheld.bin with arduino-cli...")
-            os.makedirs(BUILD_DIR, exist_ok=True)
-
-            sender_ino = os.path.join(REPO_DIR, "home_sender", "home_sender.ino")
-            handheld_ino = os.path.join(REPO_DIR, "gridwatcher_dashboard2", "gridwatcher_dashboard2.ino")
-
-            for label, ino_path, out_name in [
-                ("home_sender", sender_ino, "home_sender.ino.bin"),
-                ("handheld",    handheld_ino, "gridwatcher_dashboard2.ino.bin"),
-            ]:
-                self.log_signal.emit(f"       [BUILD] Compiling {label}...")
-                result = subprocess.run(
-                    [ARDUINO_CLI, "compile", "--fqbn", FQBN,
-                     "--output-dir", BUILD_DIR, ino_path],
-                    capture_output=True, text=True, timeout=300
-                )
-                if result.returncode == 0:
-                    src = os.path.join(BUILD_DIR, out_name)
-                    dst_name = "home_sender.bin" if label == "home_sender" else "handheld.bin"
-                    dst = os.path.join(REPO_DIR, dst_name)
-                    if os.path.exists(src):
-                        import shutil; shutil.copy(src, dst)
-                        self.log_signal.emit(f"       [SUCCESS] {dst_name} compiled ({os.path.getsize(dst):,} bytes)")
-                    else:
-                        self.log_signal.emit(f"       [WARN] {out_name} not found in build dir")
-                else:
-                    self.log_signal.emit(f"       [WARN] {label} compile failed: {result.stderr[-300:]}")
 
             # Step 5: Safe Git Sync (Zero --force, full history preservation)
             self.progress_signal.emit(88, "Step 5/6: Syncing ML model to GitHub...")
@@ -199,10 +152,8 @@ inline float predictGridRisk(float voltage, float frequency, float signal) {{
             run_git(["git", "fetch", "origin", "main"])
             run_git(["git", "reset", "--soft", "origin/main"])
 
-            # Stage strictly the updated ML model header, version file, dataset, and compiled firmware binaries
+            # Stage strictly the updated ML model header, version file, and dataset
             run_git(["git", "add", "home_sender/grid_model.h", "version.json", "windows_trainer/telemetry.csv"])
-            if os.path.exists(os.path.join(REPO_DIR, "home_sender.bin")): run_git(["git", "add", "-f", "home_sender.bin"])
-            if os.path.exists(os.path.join(REPO_DIR, "handheld.bin")): run_git(["git", "add", "-f", "handheld.bin"])
             commit_msg = f"Auto-retrain ML Model v{v_data['version']} [{time.strftime('%H:%M:%S')}]"
             run_git(["git", "commit", "-m", commit_msg])
             
@@ -216,48 +167,14 @@ inline float predictGridRisk(float voltage, float frequency, float signal) {{
 
             self.log_signal.emit(f"       [GIT SUCCESS] Pushed commit '{commit_msg}' to GitHub main branch.")
 
-            # Step 5b: Upload compiled binaries to Orange Pi firmware server (HTTP OTA source)
-            self.progress_signal.emit(92, "Step 5b/6: Uploading firmware to Orange Pi server...")
-            self.log_signal.emit("[5b/6] Uploading firmware files to Orange Pi local server...")
-            try:
-                import paramiko
-                pi_ssh = paramiko.SSHClient()
-                pi_ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-                pi_ssh.connect(ORANGE_PI_IP, username="root", password="1234", timeout=10)
-                pi_sftp = pi_ssh.open_sftp()
-                fw_files = {
-                    os.path.join(REPO_DIR, "home_sender.bin"): "/root/gridwatcher/firmware/home_sender.bin",
-                    os.path.join(REPO_DIR, "handheld.bin"):    "/root/gridwatcher/firmware/handheld.bin",
-                    os.path.join(REPO_DIR, "version.json"):    "/root/gridwatcher/firmware/version.json",
-                }
-                for local, remote in fw_files.items():
-                    if os.path.exists(local):
-                        pi_sftp.put(local, remote)
-                        self.log_signal.emit(f"       [SCP] {os.path.basename(local)} -> Pi ({os.path.getsize(local):,} bytes)")
-                pi_sftp.close()
-                pi_ssh.close()
-                self.log_signal.emit("       [SUCCESS] All firmware files on Orange Pi server — ESP32 can now download via HTTP!")
-            except Exception as scp_err:
-                self.log_signal.emit(f"       [WARN] Orange Pi SCP failed: {scp_err}. OTA will use cached files.")
-
             # Step 6: Send ESP32 Auto-OTA Trigger Signal (ONLY IF GIT PUSH SUCCEEDED)
             self.progress_signal.emit(95, "Step 6/6: Triggering ESP32 Auto-OTA over Wi-Fi...")
             self.log_signal.emit("[6/6] Sending OTA trigger signal to ESP32 (192.168.3.45)...")
             
-            import time as _time
             try:
                 req = urllib.request.Request(TRIGGER_OTA_URL, method="POST")
-                urllib.request.urlopen(req, timeout=5)
-                self.log_signal.emit("       [SUCCESS] OTA trigger sent — Base Station is updating...")
-                # Wait for Base Station to flash and reboot (~25 seconds), then stage handheld.bin
-                self.log_signal.emit("       [WAIT] Waiting 30s for Base Station to reboot into new firmware...")
-                _time.sleep(30)
-                try:
-                    req2 = urllib.request.Request(STAGE_HANDHELD_URL, method="POST")
-                    urllib.request.urlopen(req2, timeout=10)
-                    self.log_signal.emit("       [SUCCESS] handheld.bin staged on Base Station — hold BOOT on handheld to update!")
-                except Exception as sh_err:
-                    self.log_signal.emit(f"       [NOTICE] Stage handheld call: {sh_err}")
+                urllib.request.urlopen(req, timeout=3)
+                self.log_signal.emit("       [SUCCESS] OTA trigger signal sent to ESP32.")
             except Exception as ota_err:
                 self.log_signal.emit(f"       [NOTICE] Direct HTTP trigger unreachable ({ota_err}). Base station will poll GitHub on boot.")
 

@@ -804,7 +804,6 @@ void loop() {
       int cellIdx= str.indexOf(",S:");
       int pbIdx  = str.indexOf(",PB:");
       int sIdx   = str.indexOf(",SEQ:");
-      int mlIdx  = str.indexOf(",ML:");
 
       if (vIdx >= 0 && fIdx > vIdx && sIdx > fIdx) {
         packetsReceivedThisSecond++;
@@ -825,13 +824,7 @@ void loop() {
           phoneBatteryPercent = str.substring(pbIdx + 4, sIdx).toInt();
         }
 
-        // Parse ML version from packet (live update from Base Station)
-        if (mlIdx > sIdx) {
-          int newML = str.substring(mlIdx + 4).toInt();
-          if (newML > 0) mlVersion = newML;
-        }
-
-        unsigned long seq = str.substring(sIdx + 5, mlIdx > sIdx ? mlIdx : str.length()).toInt();
+        unsigned long seq = str.substring(sIdx + 5).toInt();
         if (lastExpectedSeq != 0 && seq > lastExpectedSeq) {
           totalLostPackets += (seq - lastExpectedSeq);
         }
