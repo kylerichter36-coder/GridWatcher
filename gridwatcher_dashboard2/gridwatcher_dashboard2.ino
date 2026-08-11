@@ -788,16 +788,10 @@ void loop() {
 
   if (receivedFlag) {
     receivedFlag  = false;
-    lastRxArmTime = millis();
+    receivedFlag = false;
 
-    // Read RSSI/SNR BEFORE readData — these are valid as soon as the IRQ fires
-    float irqRSSI = radio.getRSSI();
-    float irqSNR  = radio.getSNR();
-    Serial.printf("[LoRa] IRQ fired — RSSI: %.0fdBm  SNR: %.1fdB\n",
-                  irqRSSI, irqSNR);
-
-    String str;
-    int state = radio.readData(str);
+    GridPacket pkt;
+    int state = radio.readData((uint8_t*)&pkt, sizeof(GridPacket));
 
     int startState = radio.startReceive();
     if (startState != RADIOLIB_ERR_NONE) {
@@ -806,60 +800,46 @@ void loop() {
     lastRxArmTime = millis();
 
     if (state == RADIOLIB_ERR_NONE) {
-      str.trim();
-      Serial.printf("[LoRa] readData OK  raw: \"%s\"\n", str.c_str());
+      // Explicit Magic Header Validation (0x4757) — reject if mismatch
+      if (pkt.magic != 0x4757) {
+        Serial.println("[LoRa RX] Rejected packet: Invalid magic header!");
+        return;
+      }
+
       digitalWrite(LED_PIN, HIGH);
       ledOffMs = millis() + LED_RX_MS;
+
+      packetsReceivedThisSecond++;
+      lastPacketMillis = millis();
+
+      voltage  = pkt.voltage_x10 / 10.0f;
+      freq_Hz  = pkt.freq_x100 / 100.0f;
+      currentGridStatus = pkt.status;
+      currentRiskScore = pkt.risk_score;
+      mlVersion = pkt.ml_version;
+      cellSignalDbm = pkt.rssi;
+
+      totalExpectedPackets++;
+      rssi_dBm = (int)radio.getRSSI();
+      snr_dB   = radio.getSNR();
+
+      int rssiScore = constrain(map(rssi_dBm, -130, -60, 0, 100), 0, 100);
+      int snrScore  = constrain(map((int)snr_dB, -20, 10, 0, 100), 0, 100);
+      linkQual = (rssiScore * 60 + snrScore * 40) / 100;
+
+      histIdx = (histIdx + 1) % HIST_LEN;
+      vHist[histIdx] = voltage;
+      aiVoltHist[aiHistIdx] = voltage;
+      aiFreqHist[aiHistIdx] = freq_Hz;
+      aiHistIdx = (aiHistIdx + 1) % AI_HIST_LEN;
+
+      newDataFlag = true;
+      dataReceivedMs = millis();
+      Serial.printf("[LoRa RX OK] V=%.1f F=%.2f Status=%d Risk=%d%% ML=v%d\n",
+                    voltage, freq_Hz, currentGridStatus, currentRiskScore, mlVersion);
     } else {
-      Serial.printf("[LoRa] readData FAIL code %d ", state);
-      if      (state == -2) Serial.println("(CRC error — likely SF/BW/sync mismatch with sender)");
-      else if (state == -3) Serial.println("(Header error — preamble detected but header corrupt)");
-      else                  Serial.printf ("(unknown error)\n");
+      Serial.printf("[LoRa] readData FAIL code %d\n", state);
     }
-
-    if (state == RADIOLIB_ERR_NONE) {
-
-    size_t len = radio.getPacketLength();
-    if (len == sizeof(GridPacket)) {
-      GridPacket pkt;
-      int state = radio.readData((uint8_t*)&pkt, sizeof(GridPacket));
-      if (state == RADIOLIB_ERR_NONE) {
-        // Explicit Magic Header Validation (0x4757) — reject if mismatch
-        if (pkt.magic != 0x4757) {
-          Serial.println("[LoRa RX] Rejected packet: Invalid magic header!");
-          return;
-        }
-
-        packetsReceivedThisSecond++;
-        lastPacketMillis = millis();
-
-        voltage  = pkt.voltage_x10 / 10.0f;
-        freq_Hz  = pkt.freq_x100 / 100.0f;
-        currentGridStatus = pkt.status;
-        currentRiskScore = pkt.risk_score;
-        mlVersion = pkt.ml_version;
-        cellSignalDbm = pkt.rssi;
-
-        totalExpectedPackets++;
-        rssi_dBm = (int)radio.getRSSI();
-        snr_dB   = radio.getSNR();
-
-        int rssiScore = constrain(map(rssi_dBm, -130, -60, 0, 100), 0, 100);
-        int snrScore  = constrain(map((int)snr_dB, -20, 10, 0, 100), 0, 100);
-        linkQual = (rssiScore * 60 + snrScore * 40) / 100;
-
-        histIdx = (histIdx + 1) % HIST_LEN;
-        vHist[histIdx] = voltage;
-        aiVoltHist[aiHistIdx] = voltage;
-        aiFreqHist[aiHistIdx] = freq_Hz;
-        aiHistIdx = (aiHistIdx + 1) % AI_HIST_LEN;
-
-        newDataFlag = true;
-      }
-    }
-        dataReceivedMs = millis();
-      }
-    } // end state == RADIOLIB_ERR_NONE (parse block)
   } // end receivedFlag
 
   // Auto-sleep
