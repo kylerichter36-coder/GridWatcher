@@ -60,10 +60,11 @@ echo [3/5] Installing ESP32 board core (this may take 2-3 minutes)...
 echo        ESP32 board core installed.
 echo.
 
-echo [4/5] Installing required Arduino libraries...
+echo [4/6] Installing required Arduino libraries...
 "%CLI_EXE%" lib install "RadioLib" 2>&1
 "%CLI_EXE%" lib install "Adafruit GFX Library" 2>&1
 "%CLI_EXE%" lib install "Adafruit ST7735 and ST7789 Library" 2>&1
+"%CLI_EXE%" lib install "Adafruit BusIO" 2>&1
 echo        Arduino libraries installed.
 echo.
 
