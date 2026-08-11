@@ -1,20 +1,20 @@
 // Auto-generated GridWatcher ML Model Decision Weights
-// Retrained on: 2026-08-11 09:52:07
-// Accuracy: 98.97%
+// Retrained on: 2026-08-11 10:34:14
+// Accuracy: 100.00%
 
 #ifndef GRID_MODEL_H
 #define GRID_MODEL_H
 
 #ifndef ML_MODEL_VERSION
-#define ML_MODEL_VERSION 11
+#define ML_MODEL_VERSION 12
 #endif
 
 #ifndef ML_MODEL_BUILD_TIME
-#define ML_MODEL_BUILD_TIME "2026-08-11 09:52:07"
+#define ML_MODEL_BUILD_TIME "2026-08-11 10:34:14"
 #endif
 
 #ifndef ML_MODEL_ACCURACY
-#define ML_MODEL_ACCURACY "98.97%"
+#define ML_MODEL_ACCURACY "100.00%"
 #endif
 
 inline float predictGridRisk(float voltage, float frequency, float signal) {
