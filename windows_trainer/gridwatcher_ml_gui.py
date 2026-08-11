@@ -8,12 +8,20 @@ import pandas as pd
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier
 
-from PyQt6.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QTextEdit, QProgressBar, QPushButton, QFrame
-)
-from PyQt6.QtCore import Qt, QThread, pyqtSignal
-from PyQt6.QtGui import QFont
+try:
+    from PyQt5.QtWidgets import (
+        QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+        QLabel, QTextEdit, QProgressBar, QPushButton, QFrame
+    )
+    from PyQt5.QtCore import Qt, QThread, pyqtSignal
+    from PyQt5.QtGui import QFont
+except ImportError:
+    from PyQt6.QtWidgets import (
+        QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+        QLabel, QTextEdit, QProgressBar, QPushButton, QFrame
+    )
+    from PyQt6.QtCore import Qt, QThread, pyqtSignal
+    from PyQt6.QtGui import QFont
 
 # Configuration
 ORANGE_PI_IP = "192.168.3.47"
@@ -150,11 +158,8 @@ inline float predictGridRisk(float voltage, float frequency, float signal) {{
                 ("handheld",    handheld_ino, "gridwatcher_dashboard2.ino.bin"),
             ]:
                 self.log_signal.emit(f"       [BUILD] Compiling {label}...")
-                result = subprocess.run(
-                    [ARDUINO_CLI, "compile", "--fqbn", FQBN,
-                     "--output-dir", BUILD_DIR, ino_path],
-                    capture_output=True, text=True, timeout=300
-                )
+                compile_cmd = f'"{ARDUINO_CLI}" compile --fqbn {FQBN} --output-dir "{BUILD_DIR}" "{ino_path}"'
+                result = subprocess.run(compile_cmd, capture_output=True, text=True, timeout=300, shell=True)
                 if result.returncode == 0:
                     src = os.path.join(BUILD_DIR, out_name)
                     dst_name = "home_sender.bin" if label == "home_sender" else "handheld.bin"
