@@ -198,7 +198,14 @@ inline float predictGridRisk(float voltage, float frequency, float signal) {{
             ]:
                 self.log_signal.emit(f"       [BUILD] Compiling {label}...")
                 compile_cmd = f'"{ARDUINO_CLI}" compile --fqbn {FQBN} --output-dir "{BUILD_DIR}" "{ino_path}"'
-                result = subprocess.run(compile_cmd, capture_output=True, text=True, timeout=300, cwd=REPO_DIR, shell=True)
+                self.log_signal.emit(f"       [CMD] {compile_cmd}")
+                try:
+                    result = subprocess.run(compile_cmd, capture_output=True, text=True, timeout=300, cwd=REPO_DIR, shell=True)
+                except OSError as e:
+                    err_msg = f"{label} compile OS error: {e} | CLI path: {ARDUINO_CLI} | exists: {os.path.isfile(ARDUINO_CLI)}"
+                    self.log_signal.emit(f"       [ERROR] {err_msg}")
+                    self.finished_signal.emit(False, err_msg)
+                    return
                 if result.returncode == 0:
                     src = os.path.join(BUILD_DIR, out_name)
                     dst_name = "home_sender.bin" if label == "home_sender" else "handheld.bin"
