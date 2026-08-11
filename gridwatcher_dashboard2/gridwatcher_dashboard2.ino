@@ -43,6 +43,8 @@ struct __attribute__((packed)) GridPacket {
     uint8_t  risk_score;      // 1 Byte: Predictive Risk % (0..100)
     uint8_t  ml_version;      // 1 Byte: Model Version
     int8_t   rssi;            // 1 Byte: Cell Signal dBm
+    uint8_t  base_battery;    // 1 Byte: Base Station Battery % (0..100)
+    int8_t   phone_battery;   // 1 Byte: Phone Hotspot Battery % (-1 or 0..100)
 };
 
 uint8_t currentGridStatus = 0;
@@ -818,6 +820,8 @@ void loop() {
       currentRiskScore = pkt.risk_score;
       mlVersion = pkt.ml_version;
       cellSignalDbm = pkt.rssi;
+      homeBatteryPercent = pkt.base_battery;
+      phoneBatteryPercent = pkt.phone_battery;
 
       totalExpectedPackets++;
       rssi_dBm = (int)radio.getRSSI();

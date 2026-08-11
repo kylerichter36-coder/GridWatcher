@@ -280,6 +280,8 @@ struct __attribute__((packed)) GridPacket {
     uint8_t  risk_score;      // 1 Byte: Predictive Risk % (0..100)
     uint8_t  ml_version;      // 1 Byte: Model Version
     int8_t   rssi;            // 1 Byte: Cell Signal dBm
+    uint8_t  base_battery;    // 1 Byte: Base Station Battery % (0..100)
+    int8_t   phone_battery;   // 1 Byte: Phone Hotspot Battery % (-1 or 0..100)
 };
 
 struct TelemetrySample {
@@ -937,7 +939,7 @@ void loop() {
     }
     lastRiskScore = (uint8_t)constrain((int)rawRisk, 0, 100);
 
-    // Pack 10-byte GridPacket struct
+    // Pack 12-byte GridPacket struct
     GridPacket pkt;
     pkt.magic = 0x4757;
     pkt.voltage_x10 = (int16_t)(realV * 10.0f);
@@ -946,6 +948,8 @@ void loop() {
     pkt.risk_score = lastRiskScore;
     pkt.ml_version = (uint8_t)CURRENT_VERSION;
     pkt.rssi = (int8_t)cellSignalDbm;
+    pkt.base_battery = (uint8_t)constrain(batteryPercent, 0, 100);
+    pkt.phone_battery = (int8_t)phoneBatteryPercent;
 
     if (SERIAL_VERBOSE) {
       Serial.printf("TX [%lu]: V=%.1f F=%.2f Status=%d Risk=%d%% WarmedUp=%s\n",
