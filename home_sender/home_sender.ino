@@ -29,9 +29,12 @@
 #include <Preferences.h>
 #include "grid_model.h"
 
-#define CURRENT_VERSION 1
-const char* OTA_VERSION_URL = "https://raw.githubusercontent.com/kylerichter36-coder/GridWatcher/main/version.json";
-const char* OTA_BIN_URL     = "https://raw.githubusercontent.com/kylerichter36-coder/GridWatcher/main/home_sender.bin";
+#define CURRENT_VERSION ML_MODEL_VERSION
+const char* OTA_VERSION_URL      = "https://raw.githubusercontent.com/kylerichter36-coder/GridWatcher/main/version.json";
+const char* OTA_BIN_URL          = "https://raw.githubusercontent.com/kylerichter36-coder/GridWatcher/main/home_sender.bin";
+const char* OTA_HANDHELD_BIN_URL = "https://raw.githubusercontent.com/kylerichter36-coder/GridWatcher/main/handheld.bin";
+
+bool handheldUpdateReady = false;   // handheld.bin uploaded and waiting
 
 // GitHub Direct HTTPS Auto-OTA Self-Flashing Engine
 void checkGitHubAutoOTA() {
@@ -55,8 +58,26 @@ void checkGitHubAutoOTA() {
       Serial.printf("[Auto-OTA] Local Version: v%d | GitHub Remote Version: v%d\n", CURRENT_VERSION, remoteVersion);
       if (remoteVersion > CURRENT_VERSION) {
         Serial.println("[Auto-OTA] NEW FIRMWARE / ML MODEL VERSION DETECTED ON GITHUB!");
-        Serial.println("[Auto-OTA] Downloading home_sender.bin and self-flashing over HTTPS...");
         
+        // 1. Stage handheld.bin for handheld unit in LittleFS
+        Serial.println("[Auto-OTA] Downloading handheld.bin for handheld unit...");
+        HTTPClient httpHandheld;
+        if (httpHandheld.begin(client, OTA_HANDHELD_BIN_URL)) {
+          int hCode = httpHandheld.GET();
+          if (hCode == HTTP_CODE_OK) {
+            File hFile = LittleFS.open("/handheld.bin", "w");
+            if (hFile) {
+              httpHandheld.writeToStream(&hFile);
+              hFile.close();
+              handheldUpdateReady = true;
+              Serial.println("[Auto-OTA] handheld.bin staged successfully in LittleFS!");
+            }
+          }
+          httpHandheld.end();
+        }
+
+        // 2. Download home_sender.bin and self-flash sender
+        Serial.println("[Auto-OTA] Downloading home_sender.bin and self-flashing over HTTPS...");
         HTTPClient httpBin;
         if (httpBin.begin(client, OTA_BIN_URL)) {
           int binCode = httpBin.GET();
@@ -102,7 +123,6 @@ void checkGitHubAutoOTA() {
 #define LORA_PREAMBLE 8
 
 // OTA Hub state — tracks which devices still need to update
-bool handheldUpdateReady  = false;   // handheld.bin uploaded and waiting
 bool bridgeUpdateReady    = false;   // bridge.py uploaded and waiting
 bool senderUpdatePending  = false;   // sender own firmware staged, waiting for others
 bool handheldConfirmed    = false;   // handheld reported OK
@@ -491,7 +511,7 @@ void setup() {
   WiFi.softAP(apSSID, apPass);
   Serial.printf("[WiFi] AP '%s' -> %s\n", apSSID, WiFi.softAPIP().toString().c_str());
 
-  WiFi.setAutoReconnect(false);
+  WiFi.setAutoReconnect(true);
 
   // Read stored Wi-Fi credentials from ESP32 Non-Volatile Flash (NVS Preferences)
   Preferences nvPrefs;
@@ -503,23 +523,26 @@ void setup() {
     homeSSID = strdup(nvsSSID.c_str());
     homePass = strdup(nvsPass.c_str());
     Serial.printf("[NVS FLASH] Loaded permanent Wi-Fi credentials: '%s'\n", homeSSID);
-  } else {
-    // Save initial credentials into permanent NVS flash memory
+  } else if (strcmp(homeSSID, "YOUR_WIFI_SSID") != 0) {
+    // Save initial credentials from secrets.h into permanent NVS flash memory
     nvPrefs.putString("ssid", homeSSID);
     nvPrefs.putString("pass", homePass);
-    Serial.printf("[NVS FLASH] Stored permanent Wi-Fi credentials: '%s'\n", homeSSID);
+    Serial.printf("[NVS FLASH] Stored permanent Wi-Fi credentials into NVS: '%s'\n", homeSSID);
   }
   nvPrefs.end();
 
-  // Try home WiFi first (10s), then phone hotspot (10s), then AP-only
+  // Try home WiFi first (15s), then phone hotspot (if configured)
   const char* networks[][2] = {{homeSSID, homePass}, {phoneSSID, phonePass}};
   const char* networkNames[] = {"Home WiFi", "Phone Hotspot"};
   bool connected = false;
   for (int n = 0; n < 2 && !connected; n++) {
+    if (strlen(networks[n][0]) == 0 || strcmp(networks[n][0], "YOUR_PHONE_HOTSPOT_NAME") == 0 || strcmp(networks[n][0], "YOUR_WIFI_SSID") == 0) {
+      continue;
+    }
     Serial.printf("[WiFi] Trying %s ('%s')...\n", networkNames[n], networks[n][0]);
     WiFi.begin(networks[n][0], networks[n][1]);
     unsigned long t = millis();
-    while (WiFi.status() != WL_CONNECTED && millis() - t < 10000) delay(200);
+    while (WiFi.status() != WL_CONNECTED && millis() - t < 15000) delay(200);
     if (WiFi.status() == WL_CONNECTED) {
       Serial.printf("[WiFi] Connected via %s -> %s\n",
                     networkNames[n], WiFi.localIP().toString().c_str());
@@ -701,7 +724,35 @@ void setup() {
     }
   });
 
+  // ---- On-demand: pull handheld.bin from GitHub into LittleFS (independent of sender version) ----
+  server.on("/stage-handheld", HTTP_POST, []() {
+    if (WiFi.status() != WL_CONNECTED) {
+      server.send(503, "text/plain", "No home WiFi — cannot reach GitHub");
+      return;
+    }
+    server.send(200, "text/plain", "Fetching handheld.bin from GitHub...");
+    WiFiClientSecure ghClient;
+    ghClient.setInsecure();
+    HTTPClient ghHttp;
+    if (ghHttp.begin(ghClient, OTA_HANDHELD_BIN_URL)) {
+      int code = ghHttp.GET();
+      if (code == HTTP_CODE_OK) {
+        File hf = LittleFS.open("/handheld.bin", "w");
+        if (hf) {
+          ghHttp.writeToStream(&hf);
+          hf.close();
+          handheldUpdateReady = true;
+          Serial.println("[HUB] handheld.bin staged from GitHub — handheld can now update!");
+        }
+      } else {
+        Serial.printf("[HUB] Failed to fetch handheld.bin: HTTP %d\n", code);
+      }
+      ghHttp.end();
+    }
+  });
+
   server.begin();
+
   Serial.println("[WiFi] Web server & OTA hub started on port 80.");
   Serial.printf("[OTA] Dashboard: http://%s.local/ota\n", MDNS_HOSTNAME);
   Serial.printf("[INFO] TX interval: %dms | TX power: +%ddBm\n",
