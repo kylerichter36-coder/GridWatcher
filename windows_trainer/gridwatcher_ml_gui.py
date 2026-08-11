@@ -190,42 +190,38 @@ inline float predictGridRisk(float voltage, float frequency, float signal) {{
                 json.dump(v_data, vf, indent=2)
             self.log_signal.emit(f"       [SUCCESS] Version incremented to v{v_data['version']}")
 
-            # Step 4b: Compile firmware binaries with arduino-cli
-            self.progress_signal.emit(80, "Step 4b/6: Compiling firmware binaries...")
-            self.log_signal.emit("[4b/6] Compiling home_sender.bin and handheld.bin with arduino-cli...")
+            # Step 4b: Compile home_sender.bin only — it is the ONLY binary that embeds
+            # grid_model.h weights. The handheld binary never changes during ML retrains.
+            self.progress_signal.emit(80, "Step 4b/6: Compiling home_sender.bin...")
+            self.log_signal.emit("[4b/6] Compiling home_sender.bin with arduino-cli...")
+            self.log_signal.emit("       [NOTE] handheld.bin skipped — does not include grid_model.h")
             os.makedirs(BUILD_DIR, exist_ok=True)
 
             sender_ino = os.path.join(REPO_DIR, "home_sender", "home_sender.ino")
-            handheld_ino = os.path.join(REPO_DIR, "gridwatcher_dashboard2", "gridwatcher_dashboard2.ino")
-
-            for label, ino_path, out_name in [
-                ("home_sender", sender_ino, "home_sender.ino.bin"),
-                ("handheld",    handheld_ino, "gridwatcher_dashboard2.ino.bin"),
-            ]:
-                self.log_signal.emit(f"       [BUILD] Compiling {label}...")
-                compile_cmd = f'"{ARDUINO_CLI}" compile --fqbn {FQBN} --output-dir "{BUILD_DIR}" "{ino_path}"'
-                self.log_signal.emit(f"       [CMD] {compile_cmd}")
-                try:
-                    result = subprocess.run(compile_cmd, capture_output=True, text=True, timeout=300, cwd=REPO_DIR, shell=True)
-                except OSError as e:
-                    err_msg = f"{label} compile OS error: {e} | CLI path: {ARDUINO_CLI} | exists: {os.path.isfile(ARDUINO_CLI)}"
-                    self.log_signal.emit(f"       [ERROR] {err_msg}")
-                    self.finished_signal.emit(False, err_msg)
-                    return
-                if result.returncode == 0:
-                    src = os.path.join(BUILD_DIR, out_name)
-                    dst_name = "home_sender.bin" if label == "home_sender" else "handheld.bin"
-                    dst = os.path.join(REPO_DIR, dst_name)
-                    if os.path.exists(src):
-                        import shutil; shutil.copy(src, dst)
-                        self.log_signal.emit(f"       [SUCCESS] {dst_name} compiled ({os.path.getsize(dst):,} bytes)")
-                    else:
-                        self.log_signal.emit(f"       [WARN] {out_name} not found in build dir")
+            self.log_signal.emit("       [BUILD] Compiling home_sender...")
+            compile_cmd = f'"{ARDUINO_CLI}" compile --fqbn {FQBN} --output-dir "{BUILD_DIR}" "{sender_ino}"'
+            self.log_signal.emit(f"       [CMD] {compile_cmd}")
+            try:
+                result = subprocess.run(compile_cmd, capture_output=True, text=True, timeout=300, cwd=REPO_DIR, shell=True)
+            except OSError as e:
+                err_msg = f"home_sender compile OS error: {e} | CLI: {ARDUINO_CLI} | exists: {os.path.isfile(ARDUINO_CLI)}"
+                self.log_signal.emit(f"       [ERROR] {err_msg}")
+                self.finished_signal.emit(False, err_msg)
+                return
+            if result.returncode == 0:
+                import shutil
+                src = os.path.join(BUILD_DIR, "home_sender.ino.bin")
+                dst = os.path.join(REPO_DIR, "home_sender.bin")
+                if os.path.exists(src):
+                    shutil.copy(src, dst)
+                    self.log_signal.emit(f"       [SUCCESS] home_sender.bin compiled ({os.path.getsize(dst):,} bytes)")
                 else:
-                    err_msg = f"{label} compile failed: {result.stderr[-300:] or result.stdout[-300:]}"
-                    self.log_signal.emit(f"       [ERROR] {err_msg}")
-                    self.finished_signal.emit(False, err_msg)
-                    return
+                    self.log_signal.emit("       [WARN] home_sender.ino.bin not found in build dir")
+            else:
+                err_msg = f"home_sender compile failed: {result.stderr[-400:] or result.stdout[-400:]}"
+                self.log_signal.emit(f"       [ERROR] {err_msg}")
+                self.finished_signal.emit(False, err_msg)
+                return
 
             # Step 5: Safe Git Sync (Zero --force, full history preservation)
             self.progress_signal.emit(88, "Step 5/6: Syncing ML model to GitHub...")
