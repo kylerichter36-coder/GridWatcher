@@ -181,7 +181,10 @@ inline float predictGridRisk(float voltage, float frequency, float signal) {{
                     else:
                         self.log_signal.emit(f"       [WARN] {out_name} not found in build dir")
                 else:
-                    self.log_signal.emit(f"       [WARN] {label} compile failed: {result.stderr[-300:]}")
+                    err_msg = f"{label} compile failed: {result.stderr[-300:] or result.stdout[-300:]}"
+                    self.log_signal.emit(f"       [ERROR] {err_msg}")
+                    self.finished_signal.emit(False, err_msg)
+                    return
 
             # Step 5: Safe Git Sync (Zero --force, full history preservation)
             self.progress_signal.emit(88, "Step 5/6: Syncing ML model to GitHub...")
