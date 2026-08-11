@@ -1,16 +1,16 @@
 // Auto-generated GridWatcher ML Model Decision Weights
-// Retrained on: 2026-08-11 09:44:47
+// Retrained on: 2026-08-11 12:48:43
 // Accuracy: 100.00%
 
 #ifndef GRID_MODEL_H
 #define GRID_MODEL_H
 
 #ifndef ML_MODEL_VERSION
-#define ML_MODEL_VERSION 12
+#define ML_MODEL_VERSION 13
 #endif
 
 #ifndef ML_MODEL_BUILD_TIME
-#define ML_MODEL_BUILD_TIME "2026-08-11 09:44:47"
+#define ML_MODEL_BUILD_TIME "2026-08-11 12:48:43"
 #endif
 
 #ifndef ML_MODEL_ACCURACY
