@@ -23,33 +23,48 @@ except ImportError:
     from PyQt6.QtCore import Qt, QThread, pyqtSignal
     from PyQt6.QtGui import QFont
 
-# Configuration
-ORANGE_PI_IP = "192.168.3.47"
-ESP32_IP = "192.168.3.45"
-TELEMETRY_URL = f"http://{ORANGE_PI_IP}:5000/api/telemetry.csv"
-TRIGGER_OTA_URL = f"http://{ESP32_IP}/trigger-ota"
+# ── Configuration ──────────────────────────────────────────────────────────────
+# Resolve script location absolutely so double-clicking from Explorer works
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+REPO_DIR    = os.path.abspath(os.path.join(_SCRIPT_DIR, ".."))
+
+ORANGE_PI_IP       = "192.168.3.47"
+ESP32_IP           = "192.168.3.45"
+TELEMETRY_URL      = f"http://{ORANGE_PI_IP}:5000/api/telemetry.csv"
+TRIGGER_OTA_URL    = f"http://{ESP32_IP}/trigger-ota"
 STAGE_HANDHELD_URL = f"http://{ESP32_IP}/stage-handheld"
-LOCAL_CSV_PATH = os.path.join(os.path.dirname(__file__), "telemetry.csv")
-MODEL_HEADER_PATH = os.path.join(os.path.dirname(__file__), "..", "home_sender", "grid_model.h")
-VERSION_JSON_PATH = os.path.join(os.path.dirname(__file__), "..", "version.json")
+GIT_REMOTE_URL     = "https://github.com/kylerichter36-coder/GridWatcher.git"
+
+LOCAL_CSV_PATH   = os.path.join(_SCRIPT_DIR, "telemetry.csv")
+MODEL_HEADER_PATH = os.path.join(REPO_DIR, "home_sender", "grid_model.h")
+VERSION_JSON_PATH = os.path.join(REPO_DIR, "version.json")
+BUILD_DIR         = os.path.join(REPO_DIR, "build")
+
 def find_arduino_cli():
-    import shutil
+    """Search all known locations for arduino-cli.exe on Windows."""
+    import shutil, glob
     candidates = [
         r"C:\Program Files\Arduino IDE\resources\app\lib\backend\resources\arduino-cli.exe",
-        os.path.expanduser(r"~\AppData\Local\Arduino15\arduino-cli.exe"),
-        shutil.which("arduino-cli"),
-        shutil.which("arduino-cli.exe")
+        r"C:\Program Files (x86)\Arduino IDE\resources\app\lib\backend\resources\arduino-cli.exe",
+        os.path.join(os.environ.get("LOCALAPPDATA", ""), "Arduino15", "arduino-cli.exe"),
+        os.path.join(os.environ.get("APPDATA", ""), "Arduino15", "arduino-cli.exe"),
+        shutil.which("arduino-cli") or "",
     ]
-    for c in candidates:
-        if c and os.path.exists(c):
-            return c
+    for path in candidates:
+        if path and os.path.isfile(path):
+            return path
+    # Last resort: walk Program Files
+    for pattern in [
+        r"C:\Program Files\**\arduino-cli.exe",
+        r"C:\Program Files (x86)\**\arduino-cli.exe",
+    ]:
+        results = glob.glob(pattern, recursive=True)
+        if results:
+            return results[0]
     return r"C:\Program Files\Arduino IDE\resources\app\lib\backend\resources\arduino-cli.exe"
 
-REPO_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-GIT_REMOTE_URL = "https://github.com/kylerichter36-coder/GridWatcher.git"
 ARDUINO_CLI = find_arduino_cli()
-FQBN = "esp32:esp32:dfrobot_firebeetle2_esp32c6:CDCOnBoot=cdc"
-BUILD_DIR = os.path.join(REPO_DIR, "build")
+FQBN        = "esp32:esp32:dfrobot_firebeetle2_esp32c6:CDCOnBoot=cdc"
 
 class RetrainerWorker(QThread):
     progress_signal = pyqtSignal(int, str)
@@ -58,6 +73,17 @@ class RetrainerWorker(QThread):
 
     def run(self):
         try:
+            # Startup diagnostics — log all resolved paths so failures are visible
+            self.log_signal.emit(f"[INIT] Script dir  : {_SCRIPT_DIR}")
+            self.log_signal.emit(f"[INIT] Repo dir    : {REPO_DIR}")
+            self.log_signal.emit(f"[INIT] Build dir   : {BUILD_DIR}")
+            self.log_signal.emit(f"[INIT] arduino-cli : {ARDUINO_CLI}")
+            self.log_signal.emit(f"[INIT] CLI exists  : {os.path.isfile(ARDUINO_CLI)}")
+            if not os.path.isfile(ARDUINO_CLI):
+                self.log_signal.emit("[ERROR] arduino-cli NOT FOUND! Install Arduino IDE from https://www.arduino.cc/en/software")
+                self.finished_signal.emit(False, "arduino-cli not found. Please install Arduino IDE.")
+                return
+
             # Step 1: Download telemetry from Orange Pi
             self.progress_signal.emit(15, "Step 1/6: Downloading telemetry dataset...")
             self.log_signal.emit("[1/6] Connecting to telemetry server (http://192.168.3.47:5000/api/telemetry.csv)...")
