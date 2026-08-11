@@ -798,8 +798,8 @@ void loop() {
     lastFrequency = realF;
 
     snprintf(payload, sizeof(payload),
-      "V:%.1f,F:%.2f,B:%d,S:%d,PB:%d,SEQ:%lu",
-      realV, realF, batteryPercent, cellSignalDbm, phoneBatteryPercent, packetSequence);
+      "V:%.1f,F:%.2f,B:%d,S:%d,PB:%d,SEQ:%lu,ML:%d",
+      realV, realF, batteryPercent, cellSignalDbm, phoneBatteryPercent, packetSequence, CURRENT_VERSION);
 
     if (SERIAL_VERBOSE) {
       Serial.printf("TX [%lu]: %s\n", packetSequence, payload);
