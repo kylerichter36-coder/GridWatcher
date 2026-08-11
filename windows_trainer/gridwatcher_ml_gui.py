@@ -32,9 +32,20 @@ STAGE_HANDHELD_URL = f"http://{ESP32_IP}/stage-handheld"
 LOCAL_CSV_PATH = os.path.join(os.path.dirname(__file__), "telemetry.csv")
 MODEL_HEADER_PATH = os.path.join(os.path.dirname(__file__), "..", "home_sender", "grid_model.h")
 VERSION_JSON_PATH = os.path.join(os.path.dirname(__file__), "..", "version.json")
-REPO_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-GIT_REMOTE_URL = "https://github.com/kylerichter36-coder/GridWatcher.git"
-ARDUINO_CLI = r"C:\Program Files\Arduino IDE\resources\app\lib\backend\resources\arduino-cli.exe"
+def find_arduino_cli():
+    import shutil
+    candidates = [
+        r"C:\Program Files\Arduino IDE\resources\app\lib\backend\resources\arduino-cli.exe",
+        os.path.expanduser(r"~\AppData\Local\Arduino15\arduino-cli.exe"),
+        shutil.which("arduino-cli"),
+        shutil.which("arduino-cli.exe")
+    ]
+    for c in candidates:
+        if c and os.path.exists(c):
+            return c
+    return r"C:\Program Files\Arduino IDE\resources\app\lib\backend\resources\arduino-cli.exe"
+
+ARDUINO_CLI = find_arduino_cli()
 FQBN = "esp32:esp32:dfrobot_firebeetle2_esp32c6:CDCOnBoot=cdc"
 BUILD_DIR = os.path.join(REPO_DIR, "build")
 
