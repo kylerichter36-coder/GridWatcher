@@ -45,6 +45,8 @@ def find_arduino_cli():
             return c
     return r"C:\Program Files\Arduino IDE\resources\app\lib\backend\resources\arduino-cli.exe"
 
+REPO_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+GIT_REMOTE_URL = "https://github.com/kylerichter36-coder/GridWatcher.git"
 ARDUINO_CLI = find_arduino_cli()
 FQBN = "esp32:esp32:dfrobot_firebeetle2_esp32c6:CDCOnBoot=cdc"
 BUILD_DIR = os.path.join(REPO_DIR, "build")
