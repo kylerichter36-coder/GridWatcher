@@ -145,7 +145,7 @@ class RetrainerWorker(QThread):
             gap_mask = dt > 35.0
             df["gap_mask"] = gap_mask
 
-            # 1. 10s Rate of Change: find sample minimizing |(t - t_prev) - 10s| within 15s backward bound matching ESP32
+            # 1. 10s Rate of Change: find past sample (0 < elapsed <= 15s) minimizing |elapsed - 10s| matching ESP32 C++ exactly
             t_target = df["timestamp_dt"] - pd.Timedelta(seconds=10)
             df_prev_10s = pd.merge_asof(
                 pd.DataFrame({"t_target": t_target}).reset_index(),
@@ -153,14 +153,61 @@ class RetrainerWorker(QThread):
                 left_on="t_target",
                 right_on="t_prev",
                 direction="nearest",
-                tolerance=pd.Timedelta(seconds=5)
+                tolerance=pd.Timedelta(seconds=10)
             )
-            valid_prev = df_prev_10s["t_prev"] < df["timestamp_dt"]
-            dt_10s = np.where(valid_prev, (df["timestamp_dt"] - df_prev_10s["t_prev"]).dt.total_seconds(), 10.0)
-            dt_10s = np.clip(dt_10s, 1.0, 15.0)
-
-            df["dV_dt_10s"] = np.where(valid_prev, (df["voltage"] - df_prev_10s["v_prev"]) / dt_10s, 0.0)
-            df["dF_dt_10s"] = np.where(valid_prev, (df["frequency"] - df_prev_10s["f_prev"]) / dt_10s, 0.0)
+            
+            # Vectorized fallback to ensure candidate with 0 < elapsed <= 15s minimizing |elapsed - 10s| is selected if nearest tolerance missed
+            valid_mask = []
+            v_prev_vals = []
+            f_prev_vals = []
+            dt_10s_vals = []
+            
+            ts_series = df["timestamp_dt"].values
+            v_series = df["voltage"].values
+            f_series = df["frequency"].values
+            
+            for idx in range(len(df)):
+                t_now = ts_series[idx]
+                p_t = df_prev_10s.loc[idx, "t_prev"]
+                p_v = df_prev_10s.loc[idx, "v_prev"]
+                p_f = df_prev_10s.loc[idx, "f_prev"]
+                
+                if pd.notna(p_t) and p_t < t_now:
+                    elapsed = (t_now - p_t) / np.timedelta64(1, 's')
+                    if elapsed <= 15.0:
+                        valid_mask.append(True)
+                        v_prev_vals.append(p_v)
+                        f_prev_vals.append(p_f)
+                        dt_10s_vals.append(10.0 if elapsed < 1.0 else elapsed)
+                        continue
+                
+                # Iterate backward over samples in [t - 15s, t)
+                best_diff = 999999.0
+                best_k = -1
+                for k in range(idx - 1, -1, -1):
+                    elapsed = (t_now - ts_series[k]) / np.timedelta64(1, 's')
+                    if elapsed <= 0: continue
+                    if elapsed > 15.0: break
+                    diff = abs(elapsed - 10.0)
+                    if diff < best_diff:
+                        best_diff = diff
+                        best_k = k
+                
+                if best_k != -1:
+                    valid_mask.append(True)
+                    v_prev_vals.append(v_series[best_k])
+                    f_prev_vals.append(f_series[best_k])
+                    el = (t_now - ts_series[best_k]) / np.timedelta64(1, 's')
+                    dt_10s_vals.append(10.0 if el < 1.0 else el)
+                else:
+                    valid_mask.append(False)
+                    v_prev_vals.append(0.0)
+                    f_prev_vals.append(0.0)
+                    dt_10s_vals.append(10.0)
+            
+            dt_10s_arr = np.array(dt_10s_vals)
+            df["dV_dt_10s"] = np.where(valid_mask, (df["voltage"] - np.array(v_prev_vals)) / dt_10s_arr, 0.0)
+            df["dF_dt_10s"] = np.where(valid_mask, (df["frequency"] - np.array(f_prev_vals)) / dt_10s_arr, 0.0)
             df.loc[gap_mask, ["dV_dt_10s", "dF_dt_10s"]] = 0.0
 
             # 2. Pure 30s timestamp-based rolling standard deviation matching ESP32 firmware (ddof=0 for population std)
