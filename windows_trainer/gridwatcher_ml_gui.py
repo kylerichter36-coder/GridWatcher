@@ -100,9 +100,13 @@ class RetrainerWorker(QThread):
             except Exception as download_err:
                 self.log_signal.emit(f"       [NOTICE] Server API unreachable ({download_err}). Using local telemetry dataset.")
 
+            is_synthetic_dataset = False
             if not os.path.exists(LOCAL_CSV_PATH):
-                self.log_signal.emit("       [DATA] Generating baseline training dataset...")
+                is_synthetic_dataset = True
+                self.log_signal.emit("       [WARNING] Local telemetry CSV not found. Generating baseline synthetic development dataset...")
+                self.log_signal.emit("       [WARNING] THIS MODEL WILL BE FLAGGED AS A SYNTHETIC DEVELOPMENT BUILD!")
                 data = {
+                    "timestamp": pd.date_range(start="2026-01-01", periods=1000, freq="10s").strftime("%Y-%m-%d %H:%M:%S"),
                     "voltage": np.random.normal(230, 15, 1000).clip(0, 260),
                     "frequency": np.random.normal(50.0, 1.2, 1000).clip(0, 55),
                     "cell_signal": np.random.normal(-95, 10, 1000),
@@ -118,6 +122,8 @@ class RetrainerWorker(QThread):
 
             df = pd.read_csv(LOCAL_CSV_PATH)
             self.log_signal.emit(f"       [DATA] Loaded {len(df)} telemetry samples.")
+            if is_synthetic_dataset:
+                self.log_signal.emit("       [NOTICE] Dataset Source: Synthetic Development Baseline (1000 samples).")
 
             # Clean cell_signal sentinels: map -999 or invalid values (< -120 dBm) to realistic -110.0 dBm
             if "cell_signal" in df.columns:
@@ -125,37 +131,65 @@ class RetrainerWorker(QThread):
             else:
                 df["cell_signal"] = -110.0
 
-            # Compute time delta between consecutive telemetry rows (real rows logged ~10s apart)
+            # Compute timestamp-based features matching ESP32 C++ firmware exactly
             if "timestamp" in df.columns:
                 ts_dt = pd.to_datetime(df["timestamp"], errors="coerce")
-                dt = ts_dt.diff().dt.total_seconds().fillna(10.0)
             else:
-                dt = pd.Series(10.0, index=df.index)
+                ts_dt = pd.date_range(start="2026-01-01", periods=len(df), freq="10s")
 
-            # Mask genuine telemetry gaps (dt > 35s indicates server restart or loss)
+            df["timestamp_dt"] = ts_dt
+            df = df.sort_values("timestamp_dt").reset_index(drop=True)
+            df["timestamp_dt"] = df["timestamp_dt"].ffill().bfill()
+
+            dt = df["timestamp_dt"].diff().dt.total_seconds().fillna(10.0)
             gap_mask = dt > 35.0
 
-            # Compute time-adjusted rate of change & rolling stats matching 10s/30s horizons
-            df["dV_dt_10s"] = (df["voltage"] - df["voltage"].shift(1)) / dt.clip(lower=1.0)
-            df["dF_dt_10s"] = (df["frequency"] - df["frequency"].shift(1)) / dt.clip(lower=1.0)
+            # 1. 10s Rate of Change: find prior row closest to (t - 10s) and divide by actual elapsed seconds
+            df_prev_10s = pd.merge_asof(
+                df[["timestamp_dt"]].reset_index(),
+                df[["timestamp_dt", "voltage", "frequency"]].rename(columns={"timestamp_dt": "t_prev", "voltage": "v_prev", "frequency": "f_prev"}),
+                left_on="timestamp_dt",
+                right_on="t_prev",
+                direction="backward",
+                tolerance=pd.Timedelta(seconds=15),
+                allow_exact_matches=False
+            )
+            dt_10s = (df["timestamp_dt"] - df_prev_10s["t_prev"]).dt.total_seconds().clip(lower=1.0)
+            df["dV_dt_10s"] = (df["voltage"] - df_prev_10s["v_prev"]) / dt_10s
+            df["dF_dt_10s"] = (df["frequency"] - df_prev_10s["f_prev"]) / dt_10s
             df.loc[gap_mask, ["dV_dt_10s", "dF_dt_10s"]] = 0.0
 
-            df["v_std_30s"] = df["voltage"].rolling(3, min_periods=2).std()
-            df["f_std_30s"] = df["frequency"].rolling(3, min_periods=2).std()
-            df["v_slope_30s"] = (df["voltage"] - df["voltage"].shift(3)) / (dt.rolling(3).sum().clip(lower=1.0))
-            df.loc[gap_mask.rolling(3, min_periods=1).max() > 0, ["v_std_30s", "f_std_30s", "v_slope_30s"]] = 0.0
+            # 2. Pure 30s timestamp-based rolling standard deviation matching ESP32 firmware (ddof=0 for population std)
+            df["v_std_30s"] = df.rolling("30s", on="timestamp_dt")["voltage"].std(ddof=0).fillna(0.0)
+            df["f_std_30s"] = df.rolling("30s", on="timestamp_dt")["frequency"].std(ddof=0).fillna(0.0)
+
+            # 3. Pure 30s timestamp-based linear regression slope matching ESP32 firmware
+            def calc_30s_slope(window):
+                if len(window) < 2: return 0.0
+                t_sec = (window.index - window.index[0]).total_seconds().values
+                v_val = window.values
+                t_diff = t_sec - t_sec.mean()
+                v_diff = v_val - v_val.mean()
+                den = np.sum(t_diff ** 2)
+                if den < 0.0001: return 0.0
+                return np.sum(t_diff * v_diff) / den
+
+            df_temp = df.set_index("timestamp_dt")
+            df["v_slope_30s"] = df_temp["voltage"].rolling("30s").apply(calc_30s_slope, raw=False).values
+            df.loc[gap_mask, ["v_std_30s", "f_std_30s", "v_slope_30s"]] = 0.0
 
             # Fill initial window startup NaNs with 0.0
             df = df.fillna(0.0)
 
             # Continuous 0-30s forward-looking predictive target labeling
-            # Label = 1 if an anomaly (V < 210V or V > 250V or F outside 49.5-50.5Hz) occurs in t+1..t+3 while current t is NORMAL
-            is_anomaly = (df["voltage"] < 210.0) | (df["voltage"] > 250.0) | (df["frequency"] < 49.5) | (df["frequency"] > 50.5)
-            is_normal_now = (df["voltage"] >= 210.0) & (df["voltage"] <= 250.0) & (df["frequency"] >= 49.5) & (df["frequency"] <= 50.5)
+            # Label = 1 if an anomaly (V < 210V or V > 250V or F outside 49.5-50.5Hz) occurs within the upcoming 30 seconds while current t is NORMAL
+            df["is_anomaly"] = ((df["voltage"] < 210.0) | (df["voltage"] > 250.0) | (df["frequency"] < 49.5) | (df["frequency"] > 50.5)).astype(int)
+            df["is_normal_now"] = (df["voltage"] >= 210.0) & (df["voltage"] <= 250.0) & (df["frequency"] >= 49.5) & (df["frequency"] <= 50.5)
             
-            # Shift backwards to see if an anomaly occurs anywhere in the future 3 samples (~30 seconds)
-            future_anomaly = is_anomaly.iloc[::-1].rolling(3, min_periods=1).max().iloc[::-1].shift(-1).fillna(0) > 0
-            df["target_risk"] = np.where(is_normal_now & future_anomaly, 1, 0)
+            # Reverse time series to evaluate forward-looking 30-second window
+            df_rev = df.set_index("timestamp_dt").iloc[::-1]
+            future_anomaly_rev = (df_rev["is_anomaly"].rolling("30s").max().iloc[::-1].shift(-1).fillna(0) > 0)
+            df["target_risk"] = np.where(df["is_normal_now"] & future_anomaly_rev.values, 1, 0)
 
             # Step 2: Scikit-Learn Random Forest 3-Tree Training
             self.progress_signal.emit(35, "Step 2/6: Training Random Forest Classifier...")
