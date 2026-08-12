@@ -368,8 +368,8 @@ inline float predictGridRisk(float voltage, float frequency, float signal, float
             run_git(["git", "fetch", "origin", "main"])
             run_git(["git", "reset", "--soft", "origin/main"])
 
-            # Stage strictly the updated ML model header, version file, dataset, and compiled firmware binaries
-            run_git(["git", "add", "home_sender/grid_model.h", "version.json", "windows_trainer/telemetry.csv"])
+            # Stage strictly the updated ML trainer script, model header, version file, dataset, documentation, and compiled firmware binaries
+            run_git(["git", "add", "windows_trainer/gridwatcher_ml_gui.py", "home_sender/grid_model.h", "version.json", "windows_trainer/telemetry.csv", "README.md", "WORKING_ON/README.md"])
             if os.path.exists(os.path.join(REPO_DIR, "home_sender.bin")): run_git(["git", "add", "-f", "home_sender.bin"])
             if os.path.exists(os.path.join(REPO_DIR, "handheld.bin")): run_git(["git", "add", "-f", "handheld.bin"])
             commit_msg = f"Auto-retrain ML Model v{v_data['version']} [{time.strftime('%H:%M:%S')}]"
