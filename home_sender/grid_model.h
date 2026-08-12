@@ -1,6 +1,6 @@
 // Auto-generated GridWatcher Random Forest ML Decision Trees
-// Retrained on: 2026-08-12 17:35:52
-// Train Acc: 85.90% | 80/20 Test Holdout Acc: 77.24%
+// Retrained on: 2026-08-12 17:50:33
+// Train Acc: 87.15% | 80/20 Test Holdout Acc: 83.09%
 
 #ifndef GRID_MODEL_H
 #define GRID_MODEL_H
@@ -16,63 +16,63 @@ enum GridStatus : uint8_t {
 };
 
 #ifndef ML_MODEL_VERSION
-#define ML_MODEL_VERSION 29
+#define ML_MODEL_VERSION 30
 #endif
 
 #ifndef ML_MODEL_BUILD_TIME
-#define ML_MODEL_BUILD_TIME "2026-08-12 17:35:52"
+#define ML_MODEL_BUILD_TIME "2026-08-12 17:50:33"
 #endif
 
 #ifndef ML_MODEL_ACCURACY
-#define ML_MODEL_ACCURACY "Train 85.9% | Test 77.2%"
+#define ML_MODEL_ACCURACY "Train 87.2% | Test 83.1%"
 #endif
 
 inline float tree0(float voltage, float frequency, float signal, float dV_dt_10s, float dF_dt_10s, float v_std_30s, float f_std_30s, float v_slope_30s) {
   if (f_std_30s <= 2.0138f) {
-    if (dF_dt_10s <= 0.3775f) {
+    if (dF_dt_10s <= 0.0775f) {
       if (frequency <= 49.4950f) {
         return 0.0000f;
       } else {
         if (v_slope_30s <= 0.1548f) {
-          return 0.8716f;
+          return 0.8724f;
         } else {
-          return 0.7952f;
+          return 0.7938f;
         }
       }
     } else {
       if (frequency <= 50.5050f) {
-        if (frequency <= 49.4900f) {
+        if (frequency <= 49.5000f) {
           return 0.0000f;
         } else {
-          return 0.9876f;
+          return 0.9701f;
         }
       } else {
         return 0.0000f;
       }
     }
   } else {
-    if (dF_dt_10s <= 0.4675f) {
-      if (frequency <= 50.5050f) {
-        if (v_slope_30s <= 0.1590f) {
-          return 0.8440f;
-        } else {
-          return 0.7049f;
-        }
-      } else {
+    if (dF_dt_10s <= 0.0815f) {
+      if (frequency <= 49.4950f) {
         return 0.0000f;
+      } else {
+        if (v_slope_30s <= 0.0554f) {
+          return 0.8452f;
+        } else {
+          return 0.7850f;
+        }
       }
     } else {
-      if (dF_dt_10s <= 0.8725f) {
-        if (v_slope_30s <= 0.0634f) {
-          return 0.2783f;
+      if (dF_dt_10s <= 0.1905f) {
+        if (v_slope_30s <= 0.0961f) {
+          return 0.2723f;
         } else {
-          return 0.1944f;
+          return 0.1940f;
         }
       } else {
-        if (v_std_30s <= 3.2866f) {
-          return 0.0204f;
+        if (v_slope_30s <= 9.2905f) {
+          return 0.0356f;
         } else {
-          return 0.0435f;
+          return 0.7143f;
         }
       }
     }
@@ -81,38 +81,38 @@ inline float tree0(float voltage, float frequency, float signal, float dV_dt_10s
 
 inline float tree1(float voltage, float frequency, float signal, float dV_dt_10s, float dF_dt_10s, float v_std_30s, float f_std_30s, float v_slope_30s) {
   if (v_slope_30s <= 0.0804f) {
-    if (dF_dt_10s <= 0.3775f) {
+    if (dF_dt_10s <= 0.0832f) {
       if (voltage <= 209.9500f) {
         return 0.0000f;
       } else {
-        if (v_slope_30s <= -0.1411f) {
-          return 0.8205f;
+        if (v_slope_30s <= 0.0446f) {
+          return 0.7881f;
         } else {
-          return 0.7642f;
+          return 0.7316f;
         }
       }
     } else {
-      if (dV_dt_10s <= -2.4750f) {
-        if (frequency <= 50.5000f) {
-          return 0.9620f;
+      if (dV_dt_10s <= -0.6150f) {
+        if (frequency <= 50.5050f) {
+          return 0.9298f;
         } else {
           return 0.0000f;
         }
       } else {
-        if (dV_dt_10s <= -0.4750f) {
-          return 0.1124f;
+        if (dV_dt_10s <= -0.2550f) {
+          return 0.1341f;
         } else {
-          return 0.0447f;
+          return 0.0369f;
         }
       }
     }
   } else {
     if (voltage <= 227.8500f) {
       if (frequency <= 50.5050f) {
-        if (dF_dt_10s <= -0.1625f) {
-          return 0.7961f;
+        if (dF_dt_10s <= -0.0315f) {
+          return 0.7950f;
         } else {
-          return 0.9489f;
+          return 0.9450f;
         }
       } else {
         return 0.0000f;
@@ -120,15 +120,15 @@ inline float tree1(float voltage, float frequency, float signal, float dV_dt_10s
     } else {
       if (v_slope_30s <= 0.2121f) {
         if (frequency <= 50.5050f) {
-          return 0.5877f;
+          return 0.5886f;
         } else {
           return 0.0000f;
         }
       } else {
-        if (dV_dt_10s <= 0.5923f) {
-          return 0.5000f;
+        if (dV_dt_10s <= 0.2764f) {
+          return 0.3861f;
         } else {
-          return 0.2218f;
+          return 0.2284f;
         }
       }
     }
@@ -136,53 +136,53 @@ inline float tree1(float voltage, float frequency, float signal, float dV_dt_10s
 }
 
 inline float tree2(float voltage, float frequency, float signal, float dV_dt_10s, float dF_dt_10s, float v_std_30s, float f_std_30s, float v_slope_30s) {
-  if (dF_dt_10s <= 0.4175f) {
-    if (v_std_30s <= 5.1650f) {
-      if (f_std_30s <= 0.0379f) {
+  if (dF_dt_10s <= 0.0786f) {
+    if (v_std_30s <= 4.3933f) {
+      if (f_std_30s <= 0.0350f) {
         return 0.0000f;
       } else {
-        if (voltage <= 228.0500f) {
-          return 0.7982f;
+        if (voltage <= 209.9500f) {
+          return 0.0000f;
         } else {
-          return 0.5350f;
+          return 0.7937f;
         }
       }
     } else {
-      if (frequency <= 50.5050f) {
-        if (v_slope_30s <= 0.1168f) {
-          return 0.8340f;
-        } else {
-          return 0.7040f;
-        }
-      } else {
+      if (frequency <= 49.4950f) {
         return 0.0000f;
+      } else {
+        if (v_slope_30s <= 0.0444f) {
+          return 0.8547f;
+        } else {
+          return 0.8029f;
+        }
       }
     }
   } else {
-    if (voltage <= 228.6500f) {
-      if (f_std_30s <= 1.4773f) {
-        if (frequency <= 50.5050f) {
-          return 0.9938f;
+    if (voltage <= 223.9500f) {
+      if (f_std_30s <= 0.7197f) {
+        if (frequency <= 50.5000f) {
+          return 0.9744f;
         } else {
           return 0.0000f;
         }
       } else {
         if (frequency <= 50.5050f) {
-          return 0.9335f;
+          return 0.9064f;
         } else {
           return 0.0000f;
         }
       }
     } else {
-      if (dV_dt_10s <= -4.7250f) {
-        if (f_std_30s <= 1.3349f) {
-          return 0.0000f;
+      if (dV_dt_10s <= -0.2550f) {
+        if (f_std_30s <= 1.5852f) {
+          return 0.3586f;
         } else {
-          return 0.7778f;
+          return 0.1965f;
         }
       } else {
         if (frequency <= 50.5050f) {
-          return 0.9065f;
+          return 0.9342f;
         } else {
           return 0.0000f;
         }

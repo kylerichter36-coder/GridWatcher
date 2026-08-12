@@ -143,20 +143,24 @@ class RetrainerWorker(QThread):
 
             dt = df["timestamp_dt"].diff().dt.total_seconds().fillna(10.0)
             gap_mask = dt > 35.0
+            df["gap_mask"] = gap_mask
 
-            # 1. 10s Rate of Change: find prior row closest to (t - 10s) and divide by actual elapsed seconds
+            # 1. 10s Rate of Change: find sample minimizing |(t - t_prev) - 10s| within 15s backward bound matching ESP32
+            t_target = df["timestamp_dt"] - pd.Timedelta(seconds=10)
             df_prev_10s = pd.merge_asof(
-                df[["timestamp_dt"]].reset_index(),
+                pd.DataFrame({"t_target": t_target}).reset_index(),
                 df[["timestamp_dt", "voltage", "frequency"]].rename(columns={"timestamp_dt": "t_prev", "voltage": "v_prev", "frequency": "f_prev"}),
-                left_on="timestamp_dt",
+                left_on="t_target",
                 right_on="t_prev",
-                direction="backward",
-                tolerance=pd.Timedelta(seconds=15),
-                allow_exact_matches=False
+                direction="nearest",
+                tolerance=pd.Timedelta(seconds=5)
             )
-            dt_10s = (df["timestamp_dt"] - df_prev_10s["t_prev"]).dt.total_seconds().clip(lower=1.0)
-            df["dV_dt_10s"] = (df["voltage"] - df_prev_10s["v_prev"]) / dt_10s
-            df["dF_dt_10s"] = (df["frequency"] - df_prev_10s["f_prev"]) / dt_10s
+            valid_prev = df_prev_10s["t_prev"] < df["timestamp_dt"]
+            dt_10s = np.where(valid_prev, (df["timestamp_dt"] - df_prev_10s["t_prev"]).dt.total_seconds(), 10.0)
+            dt_10s = np.clip(dt_10s, 1.0, 15.0)
+
+            df["dV_dt_10s"] = np.where(valid_prev, (df["voltage"] - df_prev_10s["v_prev"]) / dt_10s, 0.0)
+            df["dF_dt_10s"] = np.where(valid_prev, (df["frequency"] - df_prev_10s["f_prev"]) / dt_10s, 0.0)
             df.loc[gap_mask, ["dV_dt_10s", "dF_dt_10s"]] = 0.0
 
             # 2. Pure 30s timestamp-based rolling standard deviation matching ESP32 firmware (ddof=0 for population std)
@@ -181,15 +185,36 @@ class RetrainerWorker(QThread):
             # Fill initial window startup NaNs with 0.0
             df = df.fillna(0.0)
 
-            # Continuous 0-30s forward-looking predictive target labeling
-            # Label = 1 if an anomaly (V < 210V or V > 250V or F outside 49.5-50.5Hz) occurs within the upcoming 30 seconds while current t is NORMAL
+            # Strict 0-30s Forward-Looking Timestamp-Based Target Labeling (Gap-Aware)
+            # Label = 1 if an anomaly (V < 210V or V > 250V or F outside 49.5-50.5Hz) occurs strictly in t < t_anom <= t + 30s without crossing a >35s telemetry gap
             df["is_anomaly"] = ((df["voltage"] < 210.0) | (df["voltage"] > 250.0) | (df["frequency"] < 49.5) | (df["frequency"] > 50.5)).astype(int)
             df["is_normal_now"] = (df["voltage"] >= 210.0) & (df["voltage"] <= 250.0) & (df["frequency"] >= 49.5) & (df["frequency"] <= 50.5)
+
+            df_anom = df[df["is_anomaly"] == 1][["timestamp_dt"]].rename(columns={"timestamp_dt": "t_anom"})
+            df_next_anom = pd.merge_asof(
+                df[["timestamp_dt"]].reset_index(),
+                df_anom,
+                left_on="timestamp_dt",
+                right_on="t_anom",
+                direction="forward",
+                allow_exact_matches=False
+            )
+            dt_anom = (df_next_anom["t_anom"] - df["timestamp_dt"]).dt.total_seconds()
             
-            # Reverse time series to evaluate forward-looking 30-second window
-            df_rev = df.set_index("timestamp_dt").iloc[::-1]
-            future_anomaly_rev = (df_rev["is_anomaly"].rolling("30s").max().iloc[::-1].shift(-1).fillna(0) > 0)
-            df["target_risk"] = np.where(df["is_normal_now"] & future_anomaly_rev.values, 1, 0)
+            df_gaps = df[df["gap_mask"]][["timestamp_dt"]].rename(columns={"timestamp_dt": "t_gap"})
+            df_next_gap = pd.merge_asof(
+                df[["timestamp_dt"]].reset_index(),
+                df_gaps,
+                left_on="timestamp_dt",
+                right_on="t_gap",
+                direction="forward",
+                allow_exact_matches=False
+            )
+            
+            has_valid_future_anomaly = (dt_anom > 0.0) & (dt_anom <= 30.0) & (
+                df_next_gap["t_gap"].isna() | (df_next_gap["t_gap"] > df_next_anom["t_anom"])
+            )
+            df["target_risk"] = np.where(df["is_normal_now"] & has_valid_future_anomaly, 1, 0)
 
             # Step 2: Scikit-Learn Random Forest 3-Tree Training
             self.progress_signal.emit(35, "Step 2/6: Training Random Forest Classifier...")
