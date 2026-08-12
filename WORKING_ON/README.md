@@ -20,7 +20,7 @@ This directory tracks active development status, system verification, and the en
 
 3. **Machine Learning Pipeline & Evaluation**
    - Implemented continuous 0–30s forward-looking target labeling in `gridwatcher_ml_gui.py` for early-warning outage risk classification.
-   - Chronological 80/20 train/test holdout split evaluating **87.15% Train Accuracy / 83.09% Test Holdout Accuracy** (`v30`).
+   - Chronological 80/20 train/test holdout split evaluating **86.48% Train Accuracy / 82.75% Test Holdout Accuracy** (`v31`).
    - Automated Scikit-Learn tree export directly into C++ conditional logic (`tree0`, `tree1`, `tree2`).
 
 4. **Multi-Machine Deployment & Security Refinements**
@@ -35,7 +35,7 @@ This directory tracks active development status, system verification, and the en
 | Component | Status | Verification Summary |
 |---|---|---|
 | `home_sender.ino` | Completed | Pure timestamp-based search, 30-sample ring buffer, Layer 1 state machine, Layer 2 RF integration, 12-byte binary LoRa TX. |
-| `grid_model.h` | Completed | 3-tree Random Forest C++ export with 8 model inputs (`v30`). |
+| `grid_model.h` | Completed | 3-tree Random Forest C++ export with 8 model inputs (`v31`). |
 | `gridwatcher_dashboard2.ino` | Completed | Binary struct unpacking (12 bytes), configurable OTA password, and magic header `0x4757` verification. |
 | `gridwatcher_ml_gui.py` | Completed | Gap-aware feature extraction ($\Delta t > 35s$), chronological 80/20 train/test holdout evaluation, 1-click single-binary OTA pipeline. |
 | `install_startup.bat` | Completed | Standalone `arduino-cli` download, ESP32 core install, library dependency resolution. |
