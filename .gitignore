@@ -1,10 +1,16 @@
-# Sensitive credentials file (never push to GitHub)
+# Sensitive credentials files (never push to GitHub)
 secrets.h
 **/secrets.h
+secrets.json
+**/secrets.json
+.env
+**/.env
 
 # Temporary & build files
 *.bin
 *.elf
 *.o
+build/
 scratch/
 .system_generated/
+__pycache__/

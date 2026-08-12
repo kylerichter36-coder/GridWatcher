@@ -11,19 +11,20 @@ This directory tracks active development status, system verification, and the en
 1. **Dual-Layer Anomaly & Predictive Risk Engine**
    - **Layer 1 (Deterministic Rules)**: Implemented C++ threshold state machine in `home_sender.ino` (`BLACKOUT`, `SURGE`, `BROWNOUT_SAG`, `FREQ_JITTER`, `NORMAL`) using strict evaluation precedence.
    - **Layer 2 (Experimental ML Risk Model)**: Implemented Random Forest model (`grid_model.h`) operating on 8 total inputs (voltage, frequency, cell signal, `dV/dt_10s`, `dF_dt_10s`, `v_std_30s`, `f_std_30s`, `v_slope_30s`).
-   - **Ring Buffer Cadence Alignment**: Added 1Hz sampling ticker and timestamp-based elapsed time math (`dt10`, `WINDOW_30S_SAMPLES = 15`) in `computeRollingFeatures()`.
+   - **Pure Timestamp Search**: Implemented pure timestamp-based search (`timestamp_ms`) in `computeRollingFeatures()` for 10s and 30s rate of change and regression slope.
 
 2. **12-Byte Binary LoRa Protocol Migration**
    - Migrated from legacy ASCII string transmission (`V:230.1,F:50.0...`) to a 12-byte binary packed struct (`GridPacket`).
-   - Achieved a **2.8x reduction in RF airtime** per packet ($34 / 12 \approx 2.83\times$, ~8ms transmission duration), complying with EU868 and US915 duty-cycle budgets.
+   - Achieved an **approximately 2.8x reduction in payload data size** ($34 / 12 \approx 2.83\times$, ~8ms transmission duration), complying with EU868 and US915 duty-cycle budgets.
    - Validates `0x4757` magic sync header in receiver firmware to verify packet structure and reject malformed/unrelated RF data.
 
-3. **Machine Learning Pipeline Refinements**
+3. **Machine Learning Pipeline & Evaluation**
    - Implemented continuous 0–30s forward-looking target labeling in `gridwatcher_ml_gui.py` for early-warning outage risk classification.
-   - Added gap-aware rolling feature calculation ($\Delta t > 35.0\text{s}$) matching real ~10s telemetry logging intervals.
+   - Chronological 80/20 train/test holdout split evaluating **86.21% Train Accuracy / 85.10% Test Holdout Accuracy** (`v22`).
    - Automated Scikit-Learn tree export directly into C++ conditional logic (`tree0`, `tree1`, `tree2`).
 
-4. **Multi-Machine Deployment & Standalone Tooling**
+4. **Multi-Machine Deployment & Security Refinements**
+   - Configurable AP/OTA passwords (`AP_PASSWORD`, `OTA_PASSWORD`) and environment/json server credentials (`GRIDWATCHER_PI_PASS` / `secrets.json`).
    - Updated `install_startup.bat` to automatically download standalone `arduino-cli` and required Arduino libraries (`RadioLib`, `Adafruit GFX`, `Adafruit ST7789`, `Adafruit BusIO`).
    - Direct dual-stage Auto-OTA engine checking local server (`192.168.3.47:5000`) with direct GitHub HTTPS fallback.
 
@@ -33,10 +34,10 @@ This directory tracks active development status, system verification, and the en
 
 | Component | Status | Verification Summary |
 |---|---|---|
-| `home_sender.ino` | Completed | 1Hz ticker, 30-sample ring buffer, Layer 1 state machine, Layer 2 RF integration, 12-byte binary LoRa TX. |
-| `grid_model.h` | Completed | 3-tree Random Forest C++ export with 8 model inputs (v21). |
-| `gridwatcher_dashboard2.ino` | Completed | Binary struct unpacking (12 bytes) and magic header `0x4757` verification. |
-| `gridwatcher_ml_gui.py` | Completed | Gap-aware feature extraction ($\Delta t > 35s$), 0–30s target labeling, 1-click single-binary OTA pipeline. |
+| `home_sender.ino` | Completed | Pure timestamp-based search, 30-sample ring buffer, Layer 1 state machine, Layer 2 RF integration, 12-byte binary LoRa TX. |
+| `grid_model.h` | Completed | 3-tree Random Forest C++ export with 8 model inputs (`v22`). |
+| `gridwatcher_dashboard2.ino` | Completed | Binary struct unpacking (12 bytes), configurable OTA password, and magic header `0x4757` verification. |
+| `gridwatcher_ml_gui.py` | Completed | Gap-aware feature extraction ($\Delta t > 35s$), chronological 80/20 train/test holdout evaluation, 1-click single-binary OTA pipeline. |
 | `install_startup.bat` | Completed | Standalone `arduino-cli` download, ESP32 core install, library dependency resolution. |
 
 ---

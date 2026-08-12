@@ -22,7 +22,7 @@ The system combines low-latency ESP32-C6 edge hardware, SX1262 LoRa telemetry, a
 
 ### Experimental Features (V1)
 * **Layer 2 ML Risk Engine**: Random Forest ensemble (`grid_model.h`) evaluating 8 model inputs to compute continuous 0–30s pre-outage risk scores.
-* **Time-Series Feature Extraction**: Gap-aware feature calculator (`dt > 35s`) computing rolling rates of change and variance.
+* **Pure Timestamp Feature Extraction**: Pure timestamp-based search (`timestamp_ms`) computing 10s and 30s rolling rates of change and variance.
 * **Dual-Stage Wireless Auto-OTA**: Wi-Fi self-flashing engine checking local server (`192.168.3.47:5000`) with direct GitHub HTTPS fallback.
 
 ### Planned for V2 (Future Revision)
@@ -79,7 +79,7 @@ GridWatcher/
 
 ### 2. 12-Byte Binary LoRa Telemetry Protocol
 
-Telemetry is packed into a 12-byte binary structure (`GridPacket`), providing a **2.8x reduction in RF airtime** compared to the legacy 34-byte ASCII string payload ($34 / 12 \approx 2.83\times$):
+Telemetry is packed into a 12-byte binary structure (`GridPacket`), providing an **approximately 2.8x reduction in payload data size** compared to the legacy 34-byte ASCII string payload ($34 / 12 \approx 2.83\times$):
 
 ```cpp
 struct __attribute__((packed)) GridPacket {
@@ -105,7 +105,7 @@ Both Handheld and Server receivers validate `packet.magic == 0x4757` to verify p
 1. Telemetry datasets are logged automatically by the Orange Pi server (~10s log interval).
 2. `gridwatcher_ml_gui.py` loads `telemetry.csv` and computes rolling features with timestamp gap invalidation ($\Delta t > 35.0\text{s}$).
 3. Samples are labeled with a continuous 0–30s forward-looking horizon (`target_risk = 1` if an anomaly occurs within the upcoming 30 seconds while current state is Normal).
-4. Scikit-Learn fits a 3-tree Random Forest classifier (**82.51% accuracy on the evaluation dataset**) and exports decision rules into `home_sender/grid_model.h`. *Note: Accuracy is an experimental metric evaluated on historical local dataset logs and does not serve as a guarantee of real-world outage prediction capability.*
+4. Scikit-Learn performs a **chronological 80/20 train/test holdout split** on historical telemetry, fitting a 3-tree Random Forest classifier (**86.21% training accuracy / 85.10% test holdout accuracy**) and exporting decision rules into `home_sender/grid_model.h`. *Note: Accuracy is an experimental metric evaluated on historical local dataset logs and does not serve as a guarantee of real-world outage prediction capability.*
 5. The Base Station firmware is compiled using `arduino-cli` and updated wirelessly via local HTTP OTA or direct GitHub HTTPS fallback.
 
 ---
@@ -118,11 +118,12 @@ Both Handheld and Server receivers validate `packet.magic == 0x4757` to verify p
 
 ---
 
-## Local Setup & Credentials
+## Local Setup & Credentials Security
 
-Wi-Fi credentials are kept out of revision control:
-* On the primary flashing PC, `home_sender/secrets.h` defines local network credentials.
-* On secondary PCs, `secrets.h` is omitted (`#if __has_include("secrets.h")`). The firmware falls back cleanly to credentials stored in ESP32 NVS memory during initial setup.
+Sensitive credentials are excluded from source control via `.gitignore`:
+* **Wi-Fi Credentials**: Loaded via `home_sender/secrets.h` (`#if __has_include("secrets.h")`) or hardware NVS storage.
+* **AP & OTA Passwords**: Defined as configurable macros (`#ifndef AP_PASSWORD`, `#ifndef OTA_PASSWORD`) overridable via `secrets.h`.
+* **Server Credentials**: `gridwatcher_ml_gui.py` checks environment variable `GRIDWATCHER_PI_PASS` or local `secrets.json` before falling back to dev defaults.
 
 To set up a new machine:
 1. Run `windows_trainer/install_startup.bat` to install `arduino-cli`, the ESP32 board core, required libraries (`RadioLib`, `Adafruit GFX`, `ST7789`, `BusIO`), and Python dependencies.

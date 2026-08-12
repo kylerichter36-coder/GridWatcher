@@ -52,7 +52,11 @@ uint8_t currentRiskScore = 0;
 
 // WiFi OTA — connects to sender AP and pulls firmware from sender hub
 const char* otaSSID = "GridWatcher-Home";  // sender AP
-const char* otaPass = "gridwatcher123";
+#ifndef OTA_PASSWORD
+  #define OTA_PASSWORD "gridwatcher123"
+#endif
+const char* otaUser = "admin";
+const char* otaPass = OTA_PASSWORD;
 #define SENDER_HOST "http://192.168.4.1"
 bool otaModeActive = false;
 

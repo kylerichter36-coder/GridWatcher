@@ -165,10 +165,18 @@ class RetrainerWorker(QThread):
             X = df[feature_cols]
             y = df["target_risk"]
             
+            # Chronological 80/20 train/test holdout split for time-series evaluation
+            split_idx = int(len(df) * 0.80)
+            X_train, X_test = X.iloc[:split_idx], X.iloc[split_idx:]
+            y_train, y_test = y.iloc[:split_idx], y.iloc[split_idx:]
+
             clf = RandomForestClassifier(n_estimators=3, max_depth=4, random_state=42)
-            clf.fit(X, y)
-            acc = clf.score(X, y) * 100
-            self.log_signal.emit(f"       [SUCCESS] Model Accuracy = {acc:.2f}%")
+            clf.fit(X_train, y_train)
+
+            train_acc = clf.score(X_train, y_train) * 100
+            test_acc  = clf.score(X_test, y_test) * 100 if len(X_test) > 0 else train_acc
+            self.log_signal.emit(f"       [EVAL] Train Acc = {train_acc:.2f}% | 80/20 Test Holdout Acc = {test_acc:.2f}%")
+            acc_str = f"Train {train_acc:.1f}% | Test {test_acc:.1f}%"
 
             # Step 3: Export C++ Random Forest Code & Increment Version
             self.progress_signal.emit(55, "Step 3/6: Exporting C++ tree code...")
@@ -208,7 +216,7 @@ class RetrainerWorker(QThread):
 
             header_code = f"""// Auto-generated GridWatcher Random Forest ML Decision Trees
 // Retrained on: {build_time}
-// Accuracy: {acc:.2f}%
+// Train Acc: {train_acc:.2f}% | 80/20 Test Holdout Acc: {test_acc:.2f}%
 
 #ifndef GRID_MODEL_H
 #define GRID_MODEL_H
@@ -232,7 +240,7 @@ enum GridStatus : uint8_t {{
 #endif
 
 #ifndef ML_MODEL_ACCURACY
-#define ML_MODEL_ACCURACY "{acc:.2f}%"
+#define ML_MODEL_ACCURACY "{acc_str}"
 #endif
 
 {cpp_trees}
@@ -347,10 +355,20 @@ inline float predictGridRisk(float voltage, float frequency, float signal, float
             self.progress_signal.emit(92, "Step 5b/6: Uploading firmware to Orange Pi server...")
             self.log_signal.emit("[5b/6] Uploading firmware files to Orange Pi local server...")
             try:
+                pi_pass = os.environ.get("GRIDWATCHER_PI_PASS", None)
+                if not pi_pass and os.path.exists(os.path.join(REPO_DIR, "secrets.json")):
+                    try:
+                        with open(os.path.join(REPO_DIR, "secrets.json"), "r") as sf:
+                            pi_pass = json.load(sf).get("pi_password")
+                    except:
+                        pass
+                if not pi_pass:
+                    pi_pass = "1234"
+
                 import paramiko
                 pi_ssh = paramiko.SSHClient()
                 pi_ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-                pi_ssh.connect(ORANGE_PI_IP, username="root", password="1234", timeout=10)
+                pi_ssh.connect(ORANGE_PI_IP, username="root", password=pi_pass, timeout=10)
                 pi_sftp = pi_ssh.open_sftp()
                 fw_files = {
                     os.path.join(REPO_DIR, "home_sender.bin"): "/root/gridwatcher/firmware/home_sender.bin",

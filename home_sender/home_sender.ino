@@ -214,8 +214,11 @@ const char* phoneSSID = "YOUR_PHONE_HOTSPOT_NAME";     // <-- fill in
 const char* phonePass = "YOUR_PHONE_HOTSPOT_PASSWORD"; // <-- fill in
 
 // ---- Sender AP (always on, for local debugging) ----
-const char* apSSID   = "GridWatcher-Home";
-const char* apPass   = "gridwatcher123";
+#ifndef AP_PASSWORD
+  #define AP_PASSWORD "gridwatcher123"
+#endif
+const char* apSSID   = "GridWatcher-AP";
+const char* apPass   = AP_PASSWORD;
 
 // mDNS hostname — access OTA at http://gridwatcher-sender.local/update from any
 // device on the same network. No WiFi switching needed on laptop.
@@ -256,7 +259,11 @@ void addTelemetrySample(float v, float f, unsigned long ts) {
 }
 
 bool isRingBufferWarmedUp() {
-    return sampleCount >= RING_BUF_SIZE;
+    if (sampleCount < 2) return false;
+    int idxOldest = (ringHead - sampleCount + RING_BUF_SIZE) % RING_BUF_SIZE;
+    int idxNow    = (ringHead - 1 + RING_BUF_SIZE) % RING_BUF_SIZE;
+    unsigned long elapsed = ringBuf[idxNow].timestamp_ms - ringBuf[idxOldest].timestamp_ms;
+    return (elapsed >= 25000); // Warmed up when at least 25-30 real seconds of continuous telemetry are in buffer
 }
 
 // Layer 1: Strict Evaluation Precedence State Machine
@@ -288,26 +295,56 @@ void computeRollingFeatures(float &dV_dt_10s, float &dF_dt_10s, float &v_std_30s
     }
 
     int idxNow = (ringHead - 1 + RING_BUF_SIZE) % RING_BUF_SIZE;
-    
-    // Find sample closest to 10s ago (~5 samples back at 2s/sample)
-    int idx10s = (ringHead - 5 + RING_BUF_SIZE) % RING_BUF_SIZE;
-    float dt10 = (ringBuf[idxNow].timestamp_ms - ringBuf[idx10s].timestamp_ms) / 1000.0f;
+    unsigned long nowTs = ringBuf[idxNow].timestamp_ms;
+
+    // 1. Pure timestamp-based search for sample closest to 10 seconds ago (10,000 ms)
+    int idx10s = idxNow;
+    float bestDiff10s = 999999.0f;
+    for (int i = 1; i < sampleCount; i++) {
+        int idx = (ringHead - 1 - i + RING_BUF_SIZE) % RING_BUF_SIZE;
+        unsigned long elapsedMs = nowTs - ringBuf[idx].timestamp_ms;
+        float diff = abs((float)elapsedMs - 10000.0f);
+        if (diff < bestDiff10s) {
+            bestDiff10s = diff;
+            idx10s = idx;
+        }
+        if (elapsedMs > 15000) break; // Don't search past 15s
+    }
+
+    float dt10 = (nowTs - ringBuf[idx10s].timestamp_ms) / 1000.0f;
     if (dt10 < 1.0f) dt10 = 10.0f; // Safety fallback
 
     dV_dt_10s = (ringBuf[idxNow].voltage - ringBuf[idx10s].voltage) / dt10;
     dF_dt_10s = (ringBuf[idxNow].frequency - ringBuf[idx10s].frequency) / dt10;
 
-    // 30-second window is last 15 samples (~30 seconds at 2s/sample)
-    #define WINDOW_30S_SAMPLES 15
+    // 2. Pure timestamp-based collection for samples within the last 30 seconds (30,000 ms)
+    int samplesIn30s = 0;
+    int indices30s[RING_BUF_SIZE];
+    for (int i = 0; i < sampleCount; i++) {
+        int idx = (ringHead - 1 - i + RING_BUF_SIZE) % RING_BUF_SIZE;
+        unsigned long elapsedMs = nowTs - ringBuf[idx].timestamp_ms;
+        if (elapsedMs <= 30000) {
+            indices30s[samplesIn30s++] = idx;
+        } else {
+            break;
+        }
+    }
+
+    if (samplesIn30s < 2) {
+        v_std_30s = 0.0f; f_std_30s = 0.0f; v_slope_30s = 0.0f;
+        return;
+    }
+
+    // Process from oldest to newest in the 30s window
     float vSum = 0.0f, fSum = 0.0f, tSum = 0.0f;
-    float tVals[WINDOW_30S_SAMPLES];
-    float vVals[WINDOW_30S_SAMPLES];
-    float fVals[WINDOW_30S_SAMPLES];
+    float tVals[RING_BUF_SIZE];
+    float vVals[RING_BUF_SIZE];
+    float fVals[RING_BUF_SIZE];
 
-    unsigned long t0 = ringBuf[(ringHead - WINDOW_30S_SAMPLES + RING_BUF_SIZE) % RING_BUF_SIZE].timestamp_ms;
+    unsigned long t0 = ringBuf[indices30s[samplesIn30s - 1]].timestamp_ms;
 
-    for (int i = 0; i < WINDOW_30S_SAMPLES; i++) {
-        int idx = (ringHead - WINDOW_30S_SAMPLES + i + RING_BUF_SIZE) % RING_BUF_SIZE;
+    for (int i = 0; i < samplesIn30s; i++) {
+        int idx = indices30s[samplesIn30s - 1 - i];
         float tSec = (ringBuf[idx].timestamp_ms - t0) / 1000.0f;
         tVals[i] = tSec;
         vVals[i] = ringBuf[idx].voltage;
@@ -317,14 +354,14 @@ void computeRollingFeatures(float &dV_dt_10s, float &dF_dt_10s, float &v_std_30s
         tSum += tSec;
     }
 
-    float vMean = vSum / (float)WINDOW_30S_SAMPLES;
-    float fMean = fSum / (float)WINDOW_30S_SAMPLES;
-    float tMean = tSum / (float)WINDOW_30S_SAMPLES;
+    float vMean = vSum / (float)samplesIn30s;
+    float fMean = fSum / (float)samplesIn30s;
+    float tMean = tSum / (float)samplesIn30s;
 
     float vSqDiff = 0.0f, fSqDiff = 0.0f;
     float num = 0.0f, den = 0.0f;
 
-    for (int i = 0; i < WINDOW_30S_SAMPLES; i++) {
+    for (int i = 0; i < samplesIn30s; i++) {
         float vDiff = vVals[i] - vMean;
         float fDiff = fVals[i] - fMean;
         float tDiff = tVals[i] - tMean;
@@ -336,8 +373,8 @@ void computeRollingFeatures(float &dV_dt_10s, float &dF_dt_10s, float &v_std_30s
         den += tDiff * tDiff;
     }
 
-    v_std_30s = sqrt(vSqDiff / (float)WINDOW_30S_SAMPLES);
-    f_std_30s = sqrt(fSqDiff / (float)WINDOW_30S_SAMPLES);
+    v_std_30s = sqrt(vSqDiff / (float)samplesIn30s);
+    f_std_30s = sqrt(fSqDiff / (float)samplesIn30s);
     v_slope_30s = (den > 0.0001f) ? (num / den) : 0.0f;
 }
 
