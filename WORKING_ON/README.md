@@ -1,47 +1,49 @@
 # Active Development & Work In Progress
 
-This directory tracks current active development tasks, architectural upgrades, and ongoing engineering objectives for the GridWatcher project.
+This directory tracks active development status, system verification, and the engineering roadmap for the GridWatcher project.
 
 ---
 
-## Current Focus: Phase 2 Rollout
+## Current Status: GridWatcher V1 (Functional Prototype)
 
-### Active Objectives
+### Completed V1 Accomplishments
 
 1. **Dual-Layer Anomaly & Predictive Risk Engine**
-   - Implemented Layer 1 deterministic threshold state machine in `home_sender.ino` (`BLACKOUT`, `SURGE`, `BROWNOUT_SAG`, `FREQ_JITTER`, `NORMAL`) using strict severity precedence.
-   - Implemented Layer 2 time-series Random Forest model (`grid_model.h`) operating on dual rolling windows (10-second fast transient window and 30-second trend/dispersion window).
+   - **Layer 1 (Deterministic Rules)**: Implemented C++ threshold state machine in `home_sender.ino` (`BLACKOUT`, `SURGE`, `BROWNOUT_SAG`, `FREQ_JITTER`, `NORMAL`) using strict evaluation precedence.
+   - **Layer 2 (Experimental ML Risk Model)**: Implemented Random Forest model (`grid_model.h`) operating on 8 total inputs (voltage, frequency, cell signal, `dV/dt_10s`, `dF_dt_10s`, `v_std_30s`, `f_std_30s`, `v_slope_30s`).
+   - **Ring Buffer Cadence Alignment**: Added 1Hz sampling ticker and timestamp-based elapsed time math (`dt10`, `WINDOW_30S_SAMPLES = 15`) in `computeRollingFeatures()`.
 
-2. **10-Byte Binary LoRa Protocol Migration**
-   - Migrated from legacy ASCII string transmission (`V:230.1,F:50.0...`) to a 10-byte binary packed struct (`GridPacket`).
-   - Achieved a 3.4x reduction in RF airtime per packet (~8ms transmission duration), complying with EU868 and US915 duty-cycle constraints.
-   - Added `0x4757` magic sync header validation in receiver firmware to drop unauthenticated packets.
+2. **12-Byte Binary LoRa Protocol Migration**
+   - Migrated from legacy ASCII string transmission (`V:230.1,F:50.0...`) to a 12-byte binary packed struct (`GridPacket`).
+   - Achieved a **2.8x reduction in RF airtime** per packet ($34 / 12 \approx 2.83\times$, ~8ms transmission duration), complying with EU868 and US915 duty-cycle budgets.
+   - Validates `0x4757` magic sync header in receiver firmware to verify packet structure and reject malformed/unrelated RF data.
 
 3. **Machine Learning Pipeline Refinements**
-   - Implemented continuous 0–30s forward-looking target labeling in `gridwatcher_ml_gui.py` to train early-warning outage prediction.
-   - Added gap-aware rolling feature calculation to invalidate time windows containing packet loss or reset gaps ($\Delta t > 2\text{s}$).
+   - Implemented continuous 0–30s forward-looking target labeling in `gridwatcher_ml_gui.py` for early-warning outage risk classification.
+   - Added gap-aware rolling feature calculation ($\Delta t > 35.0\text{s}$) matching real ~10s telemetry logging intervals.
    - Automated Scikit-Learn tree export directly into C++ conditional logic (`tree0`, `tree1`, `tree2`).
 
 4. **Multi-Machine Deployment & Standalone Tooling**
    - Updated `install_startup.bat` to automatically download standalone `arduino-cli` and required Arduino libraries (`RadioLib`, `Adafruit GFX`, `Adafruit ST7789`, `Adafruit BusIO`).
-   - Removed `handheld.bin` recompilation from the ML trainer pipeline (only `home_sender.bin` embeds model weights).
+   - Direct dual-stage Auto-OTA engine checking local server (`192.168.3.47:5000`) with direct GitHub HTTPS fallback.
 
 ---
 
-## Task Verification & Testing Status
+## Task Verification & Component Matrix
 
-| Component | Status | Description |
+| Component | Status | Verification Summary |
 |---|---|---|
-| `home_sender.ino` | Completed | Ring buffer, Layer 1 state machine, Layer 2 RF integration, 10-byte binary LoRa TX. |
-| `grid_model.h` | Completed | 3-tree Random Forest C++ export with 8 input features. |
-| `gridwatcher_dashboard2.ino` | Completed | Binary struct unpacking and magic header `0x4757` verification. |
-| `gridwatcher_ml_gui.py` | Completed | Gap-aware feature extraction, 0–30s target labeling, 1-click single-binary OTA pipeline. |
+| `home_sender.ino` | Completed | 1Hz ticker, 30-sample ring buffer, Layer 1 state machine, Layer 2 RF integration, 12-byte binary LoRa TX. |
+| `grid_model.h` | Completed | 3-tree Random Forest C++ export with 8 model inputs (v21). |
+| `gridwatcher_dashboard2.ino` | Completed | Binary struct unpacking (12 bytes) and magic header `0x4757` verification. |
+| `gridwatcher_ml_gui.py` | Completed | Gap-aware feature extraction ($\Delta t > 35s$), 0–30s target labeling, 1-click single-binary OTA pipeline. |
 | `install_startup.bat` | Completed | Standalone `arduino-cli` download, ESP32 core install, library dependency resolution. |
 
 ---
 
-## Next Steps & Future Roadmap
+## Roadmap: Planned for V2 (Custom PCB Revision)
 
-* **Telemetry Logger Integration:** Update Orange Pi `/root/gridwatcher/telemetry_logger.py` to parse 10-byte binary payload and publish to Home Assistant MQTT sensors.
-* **Home Assistant Dashboard Card:** Add custom Lovelace card for predictive outage risk gauge and grid status badge.
-* **Handheld Battery Monitoring:** Add fuel gauge ADC reading and sleep mode timer to handheld firmware.
+* **Monolithic PCB Hardware**: Replace prototype breadboard wiring with a custom 2-layer PCB.
+* **Calibrated High-Voltage AC Metering**: Integrate dedicated metering IC (e.g. ADE7753 / ATM90E26) calibrated against laboratory-grade reference meters.
+* **Cryptographic Security**: Hardware AES-128 payload encryption and HMAC packet signing.
+* **Enclosure & Power Supply**: Custom 3D-printed DIN-rail enclosure with integrated UPS battery backup.
