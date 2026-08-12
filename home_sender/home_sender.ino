@@ -288,37 +288,56 @@ void computeRollingFeatures(float &dV_dt_10s, float &dF_dt_10s, float &v_std_30s
     }
 
     int idxNow = (ringHead - 1 + RING_BUF_SIZE) % RING_BUF_SIZE;
-    int idx10s = (ringHead - 10 + RING_BUF_SIZE) % RING_BUF_SIZE;
+    
+    // Find sample closest to 10s ago (~5 samples back at 2s/sample)
+    int idx10s = (ringHead - 5 + RING_BUF_SIZE) % RING_BUF_SIZE;
+    float dt10 = (ringBuf[idxNow].timestamp_ms - ringBuf[idx10s].timestamp_ms) / 1000.0f;
+    if (dt10 < 1.0f) dt10 = 10.0f; // Safety fallback
 
-    dV_dt_10s = (ringBuf[idxNow].voltage - ringBuf[idx10s].voltage) / 10.0f;
-    dF_dt_10s = (ringBuf[idxNow].frequency - ringBuf[idx10s].frequency) / 10.0f;
+    dV_dt_10s = (ringBuf[idxNow].voltage - ringBuf[idx10s].voltage) / dt10;
+    dF_dt_10s = (ringBuf[idxNow].frequency - ringBuf[idx10s].frequency) / dt10;
 
-    float vSum = 0.0f, fSum = 0.0f;
-    for (int i = 0; i < RING_BUF_SIZE; i++) {
-        vSum += ringBuf[i].voltage;
-        fSum += ringBuf[i].frequency;
+    // 30-second window is last 15 samples (~30 seconds at 2s/sample)
+    #define WINDOW_30S_SAMPLES 15
+    float vSum = 0.0f, fSum = 0.0f, tSum = 0.0f;
+    float tVals[WINDOW_30S_SAMPLES];
+    float vVals[WINDOW_30S_SAMPLES];
+    float fVals[WINDOW_30S_SAMPLES];
+
+    unsigned long t0 = ringBuf[(ringHead - WINDOW_30S_SAMPLES + RING_BUF_SIZE) % RING_BUF_SIZE].timestamp_ms;
+
+    for (int i = 0; i < WINDOW_30S_SAMPLES; i++) {
+        int idx = (ringHead - WINDOW_30S_SAMPLES + i + RING_BUF_SIZE) % RING_BUF_SIZE;
+        float tSec = (ringBuf[idx].timestamp_ms - t0) / 1000.0f;
+        tVals[i] = tSec;
+        vVals[i] = ringBuf[idx].voltage;
+        fVals[i] = ringBuf[idx].frequency;
+        vSum += vVals[i];
+        fSum += fVals[i];
+        tSum += tSec;
     }
-    float vMean = vSum / 30.0f;
-    float fMean = fSum / 30.0f;
+
+    float vMean = vSum / (float)WINDOW_30S_SAMPLES;
+    float fMean = fSum / (float)WINDOW_30S_SAMPLES;
+    float tMean = tSum / (float)WINDOW_30S_SAMPLES;
 
     float vSqDiff = 0.0f, fSqDiff = 0.0f;
     float num = 0.0f, den = 0.0f;
-    float tMean = 14.5f;
 
-    for (int i = 0; i < RING_BUF_SIZE; i++) {
-        int idx = (ringHead - 30 + i + RING_BUF_SIZE) % RING_BUF_SIZE;
-        float vDiff = ringBuf[idx].voltage - vMean;
-        float fDiff = ringBuf[idx].frequency - fMean;
+    for (int i = 0; i < WINDOW_30S_SAMPLES; i++) {
+        float vDiff = vVals[i] - vMean;
+        float fDiff = fVals[i] - fMean;
+        float tDiff = tVals[i] - tMean;
+
         vSqDiff += vDiff * vDiff;
         fSqDiff += fDiff * fDiff;
 
-        float tDiff = i - tMean;
         num += tDiff * vDiff;
         den += tDiff * tDiff;
     }
 
-    v_std_30s = sqrt(vSqDiff / 30.0f);
-    f_std_30s = sqrt(fSqDiff / 30.0f);
+    v_std_30s = sqrt(vSqDiff / (float)WINDOW_30S_SAMPLES);
+    f_std_30s = sqrt(fSqDiff / (float)WINDOW_30S_SAMPLES);
     v_slope_30s = (den > 0.0001f) ? (num / den) : 0.0f;
 }
 
