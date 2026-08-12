@@ -53,7 +53,7 @@ void blinkDebugLED(int count) {
 // GitHub Direct HTTP/HTTPS Auto-OTA Self-Flashing Engine (Local Server + GitHub Fallback)
 void checkGitHubAutoOTA() {
   if (WiFi.status() != WL_CONNECTED) return;
-  Serial.println("[Auto-OTA] Checking for firmware updates...");
+  Serial.printf("[Auto-OTA] Checking for firmware updates (Local Version: v%d)...\n", CURRENT_VERSION);
   
   int remoteVersion = 0;
   String binUrl = "";
@@ -75,6 +75,106 @@ void checkGitHubAutoOTA() {
     }
     http.end();
   }
+
+  // 2. Fall back to GitHub HTTPS if local server is unreachable
+  if (remoteVersion == 0) {
+    WiFiClientSecure secureClient;
+    secureClient.setInsecure(); // Direct raw HTTPS fetch without root cert chain check
+    if (http.begin(secureClient, "https://raw.githubusercontent.com/kylerichter36-coder/GridWatcher/main/version.json")) {
+      int httpCode = http.GET();
+      if (httpCode == HTTP_CODE_OK) {
+        String payload = http.getString();
+        int idx = payload.indexOf("\"version\":");
+        if (idx != -1) {
+          remoteVersion = payload.substring(idx + 10).toInt();
+          binUrl = "https://raw.githubusercontent.com/kylerichter36-coder/GridWatcher/main/home_sender.bin";
+          handheldUrl = "https://raw.githubusercontent.com/kylerichter36-coder/GridWatcher/main/handheld.bin";
+        }
+      }
+      http.end();
+    }
+  }
+
+  if (remoteVersion == 0) {
+    Serial.println("[Auto-OTA] Could not check remote version from local server or GitHub.");
+    return;
+  }
+
+  Serial.printf("[Auto-OTA] Version Check -> Local: v%d | Remote: v%d\n", CURRENT_VERSION, remoteVersion);
+
+  if (remoteVersion <= CURRENT_VERSION) {
+    Serial.printf("[Auto-OTA] Device is up to date (v%d >= v%d). No update required.\n", CURRENT_VERSION, remoteVersion);
+    return;
+  }
+
+  // 3. Remote version is newer — download and flash home_sender.bin
+  Serial.printf("[Auto-OTA] NEW FIRMWARE AVAILABLE! Upgrading v%d -> v%d...\n", CURRENT_VERSION, remoteVersion);
+  Serial.printf("[Auto-OTA] Downloading binary from %s...\n", binUrl.c_str());
+
+  bool isHttps = binUrl.startsWith("https");
+  HTTPClient otaHttp;
+  int httpCode = -1;
+
+  if (isHttps) {
+    WiFiClientSecure secClient;
+    secClient.setInsecure();
+    if (otaHttp.begin(secClient, binUrl)) {
+      httpCode = otaHttp.GET();
+    }
+  } else {
+    WiFiClient netClient;
+    if (otaHttp.begin(netClient, binUrl)) {
+      httpCode = otaHttp.GET();
+    }
+  }
+
+  if (httpCode != HTTP_CODE_OK) {
+    Serial.printf("[Auto-OTA] ERROR: Failed to download firmware binary (HTTP Code: %d). Aborting update.\n", httpCode);
+    otaHttp.end();
+    return;
+  }
+
+  int contentLength = otaHttp.getSize();
+  if (contentLength < 100000) {
+    Serial.printf("[Auto-OTA] ERROR: Firmware binary too small or invalid size (%d bytes). Aborting update.\n", contentLength);
+    otaHttp.end();
+    return;
+  }
+
+  Serial.printf("[Auto-OTA] Binary size: %d bytes. Flashing OTA update partition...\n", contentLength);
+
+  if (!Update.begin(contentLength)) {
+    Serial.printf("[Auto-OTA] ERROR: Update.begin(%d) failed! Code: ", contentLength);
+    Update.printError(Serial);
+    otaHttp.end();
+    return;
+  }
+
+  WiFiClient* stream = otaHttp.getStreamPtr();
+  size_t written = Update.writeStream(*stream);
+  otaHttp.end();
+
+  if (written != (size_t)contentLength) {
+    Serial.printf("[Auto-OTA] ERROR: Wrote %d / %d bytes. Update incomplete!\n", (int)written, contentLength);
+    Update.end(false);
+    return;
+  }
+
+  if (!Update.end(true)) {
+    Serial.print("[Auto-OTA] ERROR: Update.end() failed: ");
+    Update.printError(Serial);
+    return;
+  }
+
+  if (Update.hasError()) {
+    Serial.print("[Auto-OTA] ERROR: Flashing encountered errors: ");
+    Update.printError(Serial);
+    return;
+  }
+
+  Serial.printf("[Auto-OTA] SUCCESS: Firmware v%d successfully flashed! Rebooting in 1s...\n", remoteVersion);
+  delay(1000);
+  ESP.restart();
 }
 
 // ==============================================================================
