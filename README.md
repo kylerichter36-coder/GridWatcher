@@ -76,6 +76,8 @@ GridWatcher/
   * `f_std_30s`: 30-second frequency standard deviation.
   * `v_slope_30s`: 30-second linear regression voltage slope ($\text{V}/\text{s}$).
 
+  *Note on Feature Design*: Unlike direct AC line metrics (`voltage`, `dV_dt_10s`) that physically measure local power delivery, `cell_signal` (RSRP) acts as an auxiliary environmental side-channel feature. The engineering hypothesis is that local cellular tower base stations sharing the regional utility feeder may suffer supply degradation, power dips, or emergency backup failovers during severe area grid stress, providing a secondary spatial indicator of regional grid stability alongside direct AC line voltage dynamics.
+
   Outputs an experimental risk score from 0.0% to 100.0% using an ensemble of 3 Random Forest decision trees (`max_depth=4`) exported directly into native C++ functions (`tree0()`, `tree1()`, `tree2()`).
 
 ### 2. 12-Byte Binary LoRa Telemetry Protocol
