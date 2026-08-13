@@ -1,12 +1,42 @@
-# GridWatcher V1 — Prototype System Architecture & Specification
+# GridWatcher
 
-**Version**: V1 Functional Prototype  
-**Build Date**: August 2026  
-**Status**: Active Engineering Build  
+![Status](https://img.shields.io/badge/status-V1%20Functional%20Prototype-brightgreen)
+![Hardware](https://img.shields.io/badge/hardware-ESP32--C6%20%7C%20SX1262%20LoRa-blue)
+![ML](https://img.shields.io/badge/ML-Scikit--Learn%20Random%20Forest-orange)
+![License](https://img.shields.io/badge/license-MIT-green)
 
-GridWatcher is an electrical grid monitoring platform for real-time AC voltage and frequency monitoring, anomaly detection, and experimental ML-based risk analysis.
+> **A $60 sensor + LoRa + a Raspberry Pi-class server that predicts power outages before they happen, texts you when your power drops, and retrains its own ML model automatically.**
 
-The system combines low-latency ESP32-C6 edge hardware, SX1262 LoRa telemetry, an Armbian Linux home server running Docker Compose (Home Assistant and telemetry logger), and an automated machine learning retraining pipeline.
+---
+
+## Why I Built This
+Living with an unreliable local power grid meant sudden blackouts, lost work, and voltage sags damaging household electronics. Commercial utility monitors are either expensive proprietary hardware or reactive meters that only alert *after* the power is already out. GridWatcher was built to provide localized, real-time AC voltage and frequency telemetry with early-warning machine learning risk predictions and instant SMS notifications.
+
+---
+
+## System Architecture & Data Flow
+
+```mermaid
+graph LR
+    subgraph Edge Hardware
+        ZMPT[ZMPT101B AC Sensor] -->|ADC / GPIO2| ESP32[ESP32-C6 Base Station]
+        ESP32 -->|Layer 1 C++ Rules| L1[Instant State: Normal/Sag/Surge/Blackout]
+        ESP32 -->|Layer 2 C++ ML Engine| L2[Predictive Risk Score 0-100%]
+    end
+
+    subgraph Long-Range Telemetry
+        ESP32 -->|12-Byte LoRa Packet| Handheld[ESP32-C6 Handheld Dashboard]
+        ESP32 -->|12-Byte LoRa Packet| Pi[Orange Pi / Armbian Server]
+    end
+
+    subgraph Home Automation & ML Pipeline
+        Pi -->|MQTT| HA[Home Assistant Dashboard]
+        Pi -->|CSV Logger| Trainer[Windows Retraining GUI]
+        Trainer -->|Train Random Forest| Header[Export C++ grid_model.h]
+        Trainer -->|Auto-OTA Binaries| ESP32
+        Pi -->|Termux ADB Bridge| SMS[Instant SMS Alerts]
+    end
+```
 
 ---
 
@@ -29,12 +59,16 @@ The system combines low-latency ESP32-C6 edge hardware, SX1262 LoRa telemetry, a
 ### Planned for V2 (Future Revision)
 * **Custom Integrated PCB**: Monolithic PCB design replacing devboards and point-to-point wiring.
 * **Precision AC Front-End**: Dedicated high-voltage metering IC with factory calibration against laboratory reference meters.
+* **Feature Importance & Model Interpretability**: Extract and log Gini feature importance (and SHAP values) from the trained Random Forest to confirm whether `cell_signal` contributes meaningfully or is redundant relative to AC-derived features.
 * **Cryptographic Packet Security**: Hardware-accelerated AES-128 payload encryption and packet signing.
 * **Dedicated Hardware Watchdog**: External timer IC for emergency hardware reset during power dips.
 
 ---
 
-## Repository Structure
+<details>
+<summary><b>Click to expand Deep Technical Specifications & Architecture</b></summary>
+
+### Repository Structure
 
 ```
 GridWatcher/
@@ -51,11 +85,12 @@ GridWatcher/
 └── version.json              # Current firmware & ML model version manifest
 ```
 
----
+### Core Technical Design
 
-## Core Technical Design
+#### Design Philosophy
+GridWatcher combines direct AC power delivery measurements with auxiliary environmental side-channel indicators to predict electrical grid instability.
 
-### 1. Dual-Layer Classification Architecture
+#### 1. Dual-Layer Classification Architecture
 
 * **Layer 1: Deterministic C++ State Machine (`home_sender.ino`)**
   Evaluates instantaneous voltage and frequency using strict severity precedence:
@@ -66,21 +101,27 @@ GridWatcher/
   5. **Normal**: `210.0V <= V <= 250.0V` and `49.50Hz <= F <= 50.50Hz`
 
 * **Layer 2: Experimental Time-Series ML Risk Model (`grid_model.h`)**
-  Evaluates **8 total inputs** (instantaneous voltage, frequency, cell signal strength, plus 5 derived rolling-window features extracted from a 30-sample circular ring buffer):
-  * `voltage`: Instantaneous RMS AC voltage (V).
-  * `frequency`: Instantaneous AC line frequency (Hz).
-  * `cell_signal`: Cellular network tower signal strength (RSRP in dBm, captured from Android telephony and clamped to -120 to 0 dBm).
-  * `dV_dt_10s`: 10-second voltage rate of change ($\text{V}/\text{s}$).
-  * `dF_dt_10s`: 10-second frequency rate of change ($\text{Hz}/\text{s}$).
-  * `v_std_30s`: 30-second voltage standard deviation.
-  * `f_std_30s`: 30-second frequency standard deviation.
-  * `v_slope_30s`: 30-second linear regression voltage slope ($\text{V}/\text{s}$).
+  Evaluates **8 total inputs** to compute continuous 0–30s pre-outage risk scores:
 
-  *Note on Feature Design*: Unlike direct AC line metrics (`voltage`, `dV_dt_10s`) that physically measure local power delivery, `cell_signal` (RSRP) acts as an auxiliary environmental side-channel feature. The engineering hypothesis is that local cellular tower base stations sharing the regional utility feeder may suffer supply degradation, power dips, or emergency backup failovers during severe area grid stress, providing a secondary spatial indicator of regional grid stability alongside direct AC line voltage dynamics.
+  ##### Feature Rationale & Engineering Hypotheses
+
+  | Feature | Category | Rationale & Mechanics |
+  |---|---|---|
+  | `voltage` | Direct AC | Instantaneous RMS AC voltage (V); physically tracks supply level. |
+  | `frequency` | Direct AC | Instantaneous line frequency (Hz); reflects utility generation/load balance. |
+  | `dV_dt_10s` | Direct AC | 10-second voltage rate of change ($\text{V}/\text{s}$); detects rapid dips or surges. |
+  | `dF_dt_10s` | Direct AC | 10-second frequency rate of change ($\text{Hz}/\text{s}$); catches sudden frequency decay. |
+  | `v_std_30s` | Direct AC | 30-second voltage standard deviation; quantifies short-term AC amplitude instability. |
+  | `f_std_30s` | Direct AC | 30-second frequency standard deviation; measures line frequency turbulence. |
+  | `v_slope_30s` | Direct AC | 30-second linear regression voltage slope ($\text{V}/\text{s}$); captures multi-second voltage trend directional drift. |
+  | `cell_signal` | Environmental | Cellular network tower signal strength (RSRP in dBm, clamped to -120 to 0 dBm). |
+
+  * **Cellular RSRP Feature Rationale**:
+    > **Engineering Hypothesis**: Cell towers sharing the regional utility feeder may show supply degradation or backup-power failover during severe grid stress, providing a secondary spatial/regional indicator alongside direct AC metrics. Expected to be a lagging signal (tower backup typically buffers 4–8 hours) rather than instantaneous, unlike the AC-derived features.
 
   Outputs an experimental risk score from 0.0% to 100.0% using an ensemble of 3 Random Forest decision trees (`max_depth=4`) exported directly into native C++ functions (`tree0()`, `tree1()`, `tree2()`).
 
-### 2. 12-Byte Binary LoRa Telemetry Protocol
+#### 2. 12-Byte Binary LoRa Telemetry Protocol
 
 Telemetry is packed into a 12-byte binary structure (`GridPacket`), providing an **approximately 2.8x reduction in payload data size** compared to the legacy 34-byte ASCII string payload ($34 / 12 \approx 2.83\times$):
 
@@ -101,9 +142,7 @@ struct __attribute__((packed)) GridPacket {
 
 Both Handheld and Server receivers validate `packet.magic == 0x4757` to verify packet structure and reject malformed or unrelated RF data.
 
----
-
-## Machine Learning Pipeline & Training
+### Machine Learning Pipeline & Training
 
 1. Telemetry datasets are logged automatically by the Orange Pi server (~10s log interval).
 2. `gridwatcher_ml_gui.py` loads `telemetry.csv` and computes rolling features with timestamp gap invalidation ($\Delta t > 35.0\text{s}$).
@@ -111,17 +150,21 @@ Both Handheld and Server receivers validate `packet.magic == 0x4757` to verify p
 4. Scikit-Learn performs a **chronological 80/20 train/test holdout split** on historical telemetry, fitting a 3-tree Random Forest classifier (**86.48% training accuracy / 82.75% test holdout accuracy** for live model **v31**) and exporting decision rules into `home_sender/grid_model.h`. *Note: Accuracy is an experimental metric evaluated on historical local dataset logs and does not serve as a guarantee of real-world outage prediction capability.*
 5. The Base Station firmware is compiled using `arduino-cli` and updated wirelessly via local HTTP OTA or direct GitHub HTTPS fallback.
 
----
-
-## Current Prototype Limitations
+### Current Prototype Limitations
 
 1. **Prototype Hardware Measurement**: The ZMPT101B analog sensing module and ESP32 ADC chain are prototype-grade components and have not been calibrated against laboratory-grade reference meters.
 2. **Experimental ML Validation**: The machine learning model is trained on telemetry from a single installation site. Real-world outage prediction accuracy requires extensive multi-site dataset validation across diverse grid topologies.
-3. **Local Network OTA Scope**: The wireless OTA endpoints (`/update`, `/trigger-ota`) operate unauthenticated within a trusted local Wi-Fi network boundary.
+3. **OTA Network Scope & Security**: While local network OTA endpoints (`/update`, `/trigger-ota`) operate unauthenticated within a trusted LAN boundary, the direct GitHub fallback path fetches firmware binaries over the public internet using `setInsecure()` TLS without certificate pin verification.
+4. **Known Limitations of the Cellular RSRP Feature**:
+   * **Single-Tower Dependency**: Telemetry currently observes a single cell tower's backup behavior rather than a true regional signal until multiple gateway locations are logging.
+   * **Site & Carrier Variation**: Tower backup behavior varies significantly by carrier and site (battery-only vs. generator-backed), causing RSRP proxy reliability to be inconsistent across network sectors.
+   * **Feature Importance Unvalidated**: RSRP has not yet been quantitatively validated against Gini/SHAP feature importance metrics to confirm whether the trained model actively relies on this feature during real anomaly events vs. riding along with AC voltage features.
+
+</details>
 
 ---
 
-## Local Setup & Credentials Security
+## Local Setup & Installation
 
 Sensitive credentials are excluded from source control via `.gitignore`:
 * **Wi-Fi Credentials**: Loaded via `home_sender/secrets.h` (`#if __has_include("secrets.h")`) or hardware NVS storage.
