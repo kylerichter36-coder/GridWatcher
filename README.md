@@ -5,7 +5,7 @@
 ![ML](https://img.shields.io/badge/ML-Scikit--Learn%20Random%20Forest-orange)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-> **A $60 sensor + LoRa + a Raspberry Pi-class server that predicts power outages before they happen, texts you when your power drops, and retrains its own ML model automatically.**
+> **A R1,100 sensor + LoRa + a Raspberry Pi-class server that predicts power outages before they happen, texts you when your power drops, and retrains its own ML model automatically.**
 
 ---
 
