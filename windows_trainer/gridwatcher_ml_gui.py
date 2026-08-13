@@ -71,10 +71,19 @@ def find_arduino_cli():
 ARDUINO_CLI = find_arduino_cli()
 FQBN        = "esp32:esp32:dfrobot_firebeetle2_esp32c6:CDCOnBoot=cdc"
 
+MAX_APPLICATION_FLASH_BYTES = 1310720 # 1.25 MB partition limit for FireBeetle 2 ESP32-C6
+
 class RetrainerWorker(QThread):
     progress_signal = pyqtSignal(int, str)
     log_signal = pyqtSignal(str)
     finished_signal = pyqtSignal(bool, str)
+
+    def __init__(self, initial_trees=3, initial_depth=4, allowed_configs=None, skip_git_and_ota=False):
+        super().__init__()
+        self.initial_trees = initial_trees
+        self.initial_depth = initial_depth
+        self.allowed_configs = allowed_configs
+        self.skip_git_and_ota = skip_git_and_ota
 
     def run(self):
         try:
@@ -84,11 +93,23 @@ class RetrainerWorker(QThread):
             self.log_signal.emit(f"[INIT] Build dir   : {BUILD_DIR}")
             self.log_signal.emit(f"[INIT] arduino-cli : {ARDUINO_CLI}")
             self.log_signal.emit(f"[INIT] CLI exists  : {os.path.isfile(ARDUINO_CLI)}")
+            self.log_signal.emit(f"[INIT] Flash Limit : {MAX_APPLICATION_FLASH_BYTES:,} bytes (1.25 MB)")
             if not os.path.isfile(ARDUINO_CLI):
                 self.log_signal.emit("[ERROR] arduino-cli NOT FOUND!")
                 self.log_signal.emit("[ERROR] Run install_startup.bat first — it will download everything automatically.")
                 self.finished_signal.emit(False, "arduino-cli not found. Run install_startup.bat first!")
                 return
+
+            # Preserve baseline state before any file changes
+            baseline_version_content = None
+            if os.path.exists(VERSION_JSON_PATH):
+                with open(VERSION_JSON_PATH, "r") as vf:
+                    baseline_version_content = vf.read()
+
+            baseline_header_content = None
+            if os.path.exists(MODEL_HEADER_PATH):
+                with open(MODEL_HEADER_PATH, "r") as hf:
+                    baseline_header_content = hf.read()
 
             # Step 1: Download telemetry from Orange Pi
             self.progress_signal.emit(15, "Step 1/6: Downloading telemetry dataset...")
@@ -263,10 +284,7 @@ class RetrainerWorker(QThread):
             )
             df["target_risk"] = np.where(df["is_normal_now"] & has_valid_future_anomaly, 1, 0)
 
-            # Step 2: Scikit-Learn Random Forest 3-Tree Training
-            self.progress_signal.emit(35, "Step 2/6: Training Random Forest Classifier...")
-            self.log_signal.emit("[2/6] Training Random Forest Ensemble (3 trees, max_depth=4)...")
-            
+            # Feature columns and targets
             feature_cols = ["voltage", "frequency", "cell_signal", "dV_dt_10s", "dF_dt_10s", "v_std_30s", "f_std_30s", "v_slope_30s"]
             X = df[feature_cols]
             y = df["target_risk"]
@@ -276,51 +294,81 @@ class RetrainerWorker(QThread):
             X_train, X_test = X.iloc[:split_idx], X.iloc[split_idx:]
             y_train, y_test = y.iloc[:split_idx], y.iloc[split_idx:]
 
-            clf = RandomForestClassifier(n_estimators=3, max_depth=4, random_state=42)
-            clf.fit(X_train, y_train)
-
-            train_acc = clf.score(X_train, y_train) * 100
-            test_acc  = clf.score(X_test, y_test) * 100 if len(X_test) > 0 else train_acc
-            self.log_signal.emit(f"       [EVAL] Train Acc = {train_acc:.2f}% | 80/20 Test Holdout Acc = {test_acc:.2f}%")
-            acc_str = f"Train {train_acc:.1f}% | Test {test_acc:.1f}%"
-
-            # Step 3: Export C++ Random Forest Code & Increment Version
-            self.progress_signal.emit(55, "Step 3/6: Exporting C++ tree code...")
-            self.log_signal.emit("[3/6] Exporting C++ decision trees to grid_model.h...")
+            # Define candidate model configurations (from requested config to smaller fallbacks)
+            if self.allowed_configs:
+                candidate_configs = list(self.allowed_configs)
+            else:
+                candidate_configs = [(self.initial_trees, self.initial_depth)]
+                standard_fallbacks = [
+                    (3, 4),
+                    (3, 3),
+                    (2, 4),
+                    (2, 3),
+                    (2, 2),
+                    (1, 4),
+                    (1, 3),
+                    (1, 2)
+                ]
+                for cfg in standard_fallbacks:
+                    if cfg not in candidate_configs:
+                        candidate_configs.append(cfg)
 
             new_version = 2
-            if os.path.exists(VERSION_JSON_PATH):
+            if baseline_version_content:
                 try:
-                    with open(VERSION_JSON_PATH, "r") as vf:
-                        new_version = json.load(vf).get("version", 1) + 1
+                    new_version = json.loads(baseline_version_content).get("version", 1) + 1
                 except:
                     new_version = 2
 
             build_time = time.strftime('%Y-%m-%d %H:%M:%S')
 
-            cpp_feature_names = ["voltage", "frequency", "signal", "dV_dt_10s", "dF_dt_10s", "v_std_30s", "f_std_30s", "v_slope_30s"]
+            successful_config = None
+            successful_clf = None
+            successful_train_acc = 0.0
+            successful_test_acc = 0.0
+            successful_bin_size = 0
+            compiled_bin_src = None
 
-            def export_tree_to_cpp(tree_estimator, tree_idx):
-                tree_ = tree_estimator.tree_
-                def recurse(node, depth):
-                    indent = "  " * depth
-                    if tree_.feature[node] != -2:
-                        name = cpp_feature_names[tree_.feature[node]]
-                        threshold = tree_.threshold[node]
-                        left = recurse(tree_.children_left[node], depth + 1)
-                        right = recurse(tree_.children_right[node], depth + 1)
-                        return f"{indent}if ({name} <= {threshold:.4f}f) {{\n{left}\n{indent}}} else {{\n{right}\n{indent}}}"
-                    else:
-                        vals = tree_.value[node][0]
-                        prob = float(vals[1] / np.sum(vals)) if np.sum(vals) > 0 else 0.0
-                        return f"{indent}return {prob:.4f}f;"
+            os.makedirs(BUILD_DIR, exist_ok=True)
+            sender_ino = os.path.join(REPO_DIR, "home_sender", "home_sender.ino")
 
-                body = recurse(0, 1)
-                return f"inline float tree{tree_idx}(float voltage, float frequency, float signal, float dV_dt_10s, float dF_dt_10s, float v_std_30s, float f_std_30s, float v_slope_30s) {{\n{body}\n}}"
+            for attempt_idx, (n_trees, max_depth) in enumerate(candidate_configs, 1):
+                self.progress_signal.emit(35 + int((attempt_idx / len(candidate_configs)) * 40), f"Step 2-4/6: Trying model config #{attempt_idx} ({n_trees} trees, max_depth={max_depth})...")
+                self.log_signal.emit(f"\n[ATTEMPT #{attempt_idx}] Training Random Forest Ensemble ({n_trees} trees, max_depth={max_depth})...")
+                
+                clf = RandomForestClassifier(n_estimators=n_trees, max_depth=max_depth, random_state=42)
+                clf.fit(X_train, y_train)
 
-            cpp_trees = "\n\n".join([export_tree_to_cpp(t, i) for i, t in enumerate(clf.estimators_)])
+                train_acc = clf.score(X_train, y_train) * 100
+                test_acc  = clf.score(X_test, y_test) * 100 if len(X_test) > 0 else train_acc
+                acc_str = f"Train {train_acc:.1f}% | Test {test_acc:.1f}%"
+                self.log_signal.emit(f"       [EVAL] Train Acc = {train_acc:.2f}% | 80/20 Test Holdout Acc = {test_acc:.2f}%")
 
-            header_code = f"""// Auto-generated GridWatcher Random Forest ML Decision Trees
+                cpp_feature_names = ["voltage", "frequency", "signal", "dV_dt_10s", "dF_dt_10s", "v_std_30s", "f_std_30s", "v_slope_30s"]
+
+                def export_tree_to_cpp(tree_estimator, tree_idx):
+                    tree_ = tree_estimator.tree_
+                    def recurse(node, depth):
+                        indent = "  " * depth
+                        if tree_.feature[node] != -2:
+                            name = cpp_feature_names[tree_.feature[node]]
+                            threshold = tree_.threshold[node]
+                            left = recurse(tree_.children_left[node], depth + 1)
+                            right = recurse(tree_.children_right[node], depth + 1)
+                            return f"{indent}if ({name} <= {threshold:.4f}f) {{\n{left}\n{indent}}} else {{\n{right}\n{indent}}}"
+                        else:
+                            vals = tree_.value[node][0]
+                            prob = float(vals[1] / np.sum(vals)) if np.sum(vals) > 0 else 0.0
+                            return f"{indent}return {prob:.4f}f;"
+
+                    body = recurse(0, 1)
+                    return f"inline float tree{tree_idx}(float voltage, float frequency, float signal, float dV_dt_10s, float dF_dt_10s, float v_std_30s, float f_std_30s, float v_slope_30s) {{\n{body}\n}}"
+
+                cpp_trees = "\n\n".join([export_tree_to_cpp(t, i) for i, t in enumerate(clf.estimators_)])
+                predict_calls = "\n".join([f"    float p{i} = tree{i}(voltage, frequency, signal, dV_dt_10s, dF_dt_10s, v_std_30s, f_std_30s, v_slope_30s);" for i in range(len(clf.estimators_))])
+                sum_calls = " + ".join([f"p{i}" for i in range(len(clf.estimators_))])
+
+                header_code = f"""// Auto-generated GridWatcher Random Forest ML Decision Trees
 // Retrained on: {build_time}
 // Train Acc: {train_acc:.2f}% | 80/20 Test Holdout Acc: {test_acc:.2f}%
 
@@ -352,60 +400,80 @@ enum GridStatus : uint8_t {{
 {cpp_trees}
 
 inline float predictGridRisk(float voltage, float frequency, float signal, float dV_dt_10s, float dF_dt_10s, float v_std_30s, float f_std_30s, float v_slope_30s) {{
-    float p0 = tree0(voltage, frequency, signal, dV_dt_10s, dF_dt_10s, v_std_30s, f_std_30s, v_slope_30s);
-    float p1 = tree1(voltage, frequency, signal, dV_dt_10s, dF_dt_10s, v_std_30s, f_std_30s, v_slope_30s);
-    float p2 = tree2(voltage, frequency, signal, dV_dt_10s, dF_dt_10s, v_std_30s, f_std_30s, v_slope_30s);
-    float avgProb = (p0 + p1 + p2) / 3.0f;
+{predict_calls}
+    float avgProb = ({sum_calls}) / {float(len(clf.estimators_))}f;
     return avgProb * 100.0f;
 }}
 
 #endif // GRID_MODEL_H
 """
-            os.makedirs(os.path.dirname(MODEL_HEADER_PATH), exist_ok=True)
-            with open(MODEL_HEADER_PATH, "w") as f:
-                f.write(header_code)
-            self.log_signal.emit(f"       [SUCCESS] Decision weights exported to grid_model.h (v{new_version}).")
+                os.makedirs(os.path.dirname(MODEL_HEADER_PATH), exist_ok=True)
+                with open(MODEL_HEADER_PATH, "w") as f:
+                    f.write(header_code)
 
-            # Step 4: Increment Version
-            self.progress_signal.emit(75, "Step 4/6: Updating version.json...")
-            self.log_signal.emit("[4/6] Updating version.json...")
+                self.log_signal.emit(f"       [BUILD] Compiling home_sender.ino with arduino-cli for config ({n_trees} trees, depth {max_depth})...")
+                compile_cmd = f'"{ARDUINO_CLI}" compile --fqbn {FQBN} --output-dir "{BUILD_DIR}" "{sender_ino}"'
+                
+                try:
+                    result = subprocess.run(compile_cmd, capture_output=True, text=True, timeout=300, cwd=REPO_DIR, shell=True)
+                except OSError as e:
+                    self.log_signal.emit(f"       [ERROR] OS error running compiler: {e}")
+                    continue
+
+                src = os.path.join(BUILD_DIR, "home_sender.ino.bin")
+                if result.returncode == 0 and os.path.exists(src):
+                    bin_size = os.path.getsize(src)
+                    pct_used = (bin_size / MAX_APPLICATION_FLASH_BYTES) * 100.0
+                    self.log_signal.emit(f"       [COMPILE] Output binary size: {bin_size:,} bytes ({pct_used:.1f}% of {MAX_APPLICATION_FLASH_BYTES:,} limit)")
+                    
+                    if bin_size <= MAX_APPLICATION_FLASH_BYTES:
+                        self.log_signal.emit(f"       [SUCCESS] Config ({n_trees} trees, depth {max_depth}) compiled cleanly and fits flash limit!")
+                        successful_config = (n_trees, max_depth)
+                        successful_clf = clf
+                        successful_train_acc = train_acc
+                        successful_test_acc = test_acc
+                        successful_bin_size = bin_size
+                        compiled_bin_src = src
+                        break
+                    else:
+                        self.log_signal.emit(f"       [WARN] Config ({n_trees} trees, depth {max_depth}) exceeded flash limit ({bin_size:,} > {MAX_APPLICATION_FLASH_BYTES:,}).")
+                else:
+                    err_output = (result.stderr or result.stdout or "").strip()
+                    last_line = err_output.splitlines()[-1] if err_output else "Unknown build failure"
+                    self.log_signal.emit(f"       [WARN] Config ({n_trees} trees, depth {max_depth}) failed compilation: {last_line}")
+                    if "text section exceeds available space" in err_output or "Sketch too big" in err_output:
+                        self.log_signal.emit("       [FALLBACK] Reason: Application text section exceeds available flash space in board.")
+
+            if not successful_config:
+                self.log_signal.emit("\n[FAILURE] ALL ALLOWED MODEL CONFIGURATIONS FAILED TO COMPILE OR EXCEEDED FLASH LIMIT!")
+                self.log_signal.emit("          Restoring baseline grid_model.h and version.json...")
+                if baseline_header_content:
+                    with open(MODEL_HEADER_PATH, "w") as f:
+                        f.write(baseline_header_content)
+                if baseline_version_content:
+                    with open(VERSION_JSON_PATH, "w") as vf:
+                        vf.write(baseline_version_content)
+                
+                self.finished_signal.emit(False, "Compilation failed for all model configs. Baseline release remains untouched.")
+                return
+
+            # Update version.json and copy home_sender.bin ONLY AFTER compilation succeeds!
+            self.progress_signal.emit(75, "Step 4/6: Updating version.json & firmware binary...")
+            self.log_signal.emit("[4/6] Updating version.json & finalizing home_sender.bin...")
             
             v_data = {"version": new_version, "build_time": build_time}
             with open(VERSION_JSON_PATH, "w") as vf:
                 json.dump(v_data, vf, indent=2)
-            self.log_signal.emit(f"       [SUCCESS] Version incremented to v{v_data['version']}")
 
-            # Step 4b: Compile home_sender.bin only — it is the ONLY binary that embeds
-            # grid_model.h weights. The handheld binary never changes during ML retrains.
-            self.progress_signal.emit(80, "Step 4b/6: Compiling home_sender.bin...")
-            self.log_signal.emit("[4b/6] Compiling home_sender.bin with arduino-cli...")
-            self.log_signal.emit("       [NOTE] handheld.bin skipped — does not include grid_model.h")
-            os.makedirs(BUILD_DIR, exist_ok=True)
+            dst = os.path.join(REPO_DIR, "home_sender.bin")
+            import shutil
+            shutil.copy(compiled_bin_src, dst)
+            self.log_signal.emit(f"       [SUCCESS] Version incremented to v{new_version}. home_sender.bin updated ({successful_bin_size:,} bytes).")
 
-            sender_ino = os.path.join(REPO_DIR, "home_sender", "home_sender.ino")
-            self.log_signal.emit("       [BUILD] Compiling home_sender...")
-            compile_cmd = f'"{ARDUINO_CLI}" compile --fqbn {FQBN} --output-dir "{BUILD_DIR}" "{sender_ino}"'
-            self.log_signal.emit(f"       [CMD] {compile_cmd}")
-            try:
-                result = subprocess.run(compile_cmd, capture_output=True, text=True, timeout=300, cwd=REPO_DIR, shell=True)
-            except OSError as e:
-                err_msg = f"home_sender compile OS error: {e} | CLI: {ARDUINO_CLI} | exists: {os.path.isfile(ARDUINO_CLI)}"
-                self.log_signal.emit(f"       [ERROR] {err_msg}")
-                self.finished_signal.emit(False, err_msg)
-                return
-            if result.returncode == 0:
-                import shutil
-                src = os.path.join(BUILD_DIR, "home_sender.ino.bin")
-                dst = os.path.join(REPO_DIR, "home_sender.bin")
-                if os.path.exists(src):
-                    shutil.copy(src, dst)
-                    self.log_signal.emit(f"       [SUCCESS] home_sender.bin compiled ({os.path.getsize(dst):,} bytes)")
-                else:
-                    self.log_signal.emit("       [WARN] home_sender.ino.bin not found in build dir")
-            else:
-                err_msg = f"home_sender compile failed: {result.stderr[-400:] or result.stdout[-400:]}"
-                self.log_signal.emit(f"       [ERROR] {err_msg}")
-                self.finished_signal.emit(False, err_msg)
+            if self.skip_git_and_ota:
+                self.log_signal.emit("       [TEST MODE] Skipping Git sync, Orange Pi upload, and OTA triggers.")
+                self.progress_signal.emit(100, "COMPLETE: Process Finished (Test Mode).")
+                self.finished_signal.emit(True, f"SUCCESS: ML Model v{v_data['version']} retrained & compiled.")
                 return
 
             # Step 5: Safe Git Sync (Zero --force, full history preservation)
