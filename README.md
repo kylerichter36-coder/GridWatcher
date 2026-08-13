@@ -17,6 +17,7 @@ The system combines low-latency ESP32-C6 edge hardware, SX1262 LoRa telemetry, a
 * **Layer 1 State Machine**: Real-time deterministic C++ grid state classification (`BLACKOUT`, `SURGE`, `BROWNOUT_SAG`, `FREQ_JITTER`, `NORMAL`).
 * **12-Byte Binary LoRa Protocol**: Compact binary packet structure (`GridPacket`) with magic header verification (`0x4757`).
 * **Handheld TFT Dashboard**: ESP32-C6 handheld receiver with ST7789 240x135 display rendering live electrical, battery, and signal status.
+* **Android Termux Gateway & SMS Bridge**: Refurbished Android phone running Termux/ADB to log cellular tower telemetry, host live status web endpoints, and dispatch instant SMS outage alerts via `termux-sms-send`.
 * **Home Assistant Integration**: Real-time MQTT telemetry reporting and Lovelace dashboard integration.
 * **1-Click Windows Setup**: Standalone `install_startup.bat` script that configures `arduino-cli`, ESP32 cores, and required libraries.
 
@@ -68,7 +69,7 @@ GridWatcher/
   Evaluates **8 total inputs** (instantaneous voltage, frequency, cell signal strength, plus 5 derived rolling-window features extracted from a 30-sample circular ring buffer):
   * `voltage`: Instantaneous RMS AC voltage (V).
   * `frequency`: Instantaneous AC line frequency (Hz).
-  * `cell_signal`: Mobile hotspot signal strength (dBm, clamped to -120 to 0 dBm).
+  * `cell_signal`: Cellular network tower signal strength (RSRP in dBm, captured from Android telephony and clamped to -120 to 0 dBm).
   * `dV_dt_10s`: 10-second voltage rate of change ($\text{V}/\text{s}$).
   * `dF_dt_10s`: 10-second frequency rate of change ($\text{Hz}/\text{s}$).
   * `v_std_30s`: 30-second voltage standard deviation.
@@ -89,7 +90,7 @@ struct __attribute__((packed)) GridPacket {
     uint8_t  status;          // 1 Byte: GridStatus Enum (0..4)
     uint8_t  risk_score;      // 1 Byte: Experimental Risk % (0..100)
     uint8_t  ml_version;      // 1 Byte: Model Version (ML_MODEL_VERSION)
-    int8_t   rssi;            // 1 Byte: Cell Signal Strength (-120..0 dBm)
+    int8_t   rssi;            // 1 Byte: Cellular Tower Signal Strength RSRP (-120..0 dBm)
     uint8_t  base_battery;    // 1 Byte: Base Station Battery % (0..100)
     int8_t   phone_battery;   // 1 Byte: Phone Hotspot Battery % (-1 or 0..100)
 };
