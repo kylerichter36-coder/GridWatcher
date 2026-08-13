@@ -25,6 +25,7 @@ This directory tracks active development status, system verification, and the en
 
 4. **Multi-Machine Deployment & Security Refinements**
    - Configurable AP/OTA passwords (`AP_PASSWORD`, `OTA_PASSWORD`) and environment/json server credentials (`GRIDWATCHER_PI_PASS` / `secrets.json`).
+   - Android Termux cellular gateway and SMS bridge (`phone_server/live_cell_bridge.py`) capturing cell tower RSRP telemetry and sending instant SMS alerts via `termux-sms-send`.
    - Updated `install_startup.bat` to automatically download standalone `arduino-cli` and required Arduino libraries (`RadioLib`, `Adafruit GFX`, `Adafruit ST7789`, `Adafruit BusIO`).
    - Direct dual-stage Auto-OTA engine checking local server (`192.168.3.47:5000`) with direct GitHub HTTPS fallback.
 
