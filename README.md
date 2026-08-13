@@ -5,7 +5,7 @@
 ![ML](https://img.shields.io/badge/ML-Scikit--Learn%20Random%20Forest-orange)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-> **A R1,100 sensor + LoRa + a Raspberry Pi-class server that predicts power outages before they happen, texts you when your power drops, and retrains its own ML model automatically.**
+> **A ~R1,500 dual-device LoRa sensor + Raspberry Pi-class server system that predicts power outages before they happen, texts your phone, and retrains its own ML model automatically.**
 
 ---
 
@@ -84,6 +84,15 @@ GridWatcher/
 │   └── README.md
 └── version.json              # Current firmware & ML model version manifest
 ```
+
+### Prototype Bill of Materials & Cost Breakdown (ZAR)
+
+| Unit | Key Components | Prototype Cost (incl 15% VAT) |
+|---|---|:---:|
+| **Handheld Receiver Dashboard** | ESP32-C6, SX1262 LoRa, ST7789 TFT Display, 2000mAh LiPo, 868MHz High-Gain Antenna, Protoboard | **R736** |
+| **Base Station Sender** | ESP32-C6, SX1262 LoRa, ZMPT101B AC Sensor, Hi-Link 5V Power, Boost Regulator, 868MHz High-Gain Antenna, LiPo Backup | **R843** |
+| **Central Home Server & Gateway** | Armbian/Orange Pi Server + Refurbished Android Phone (Termux) | Reused / R0 |
+| **Total Combined Prototype Build** | Both complete units including antennas, cabling, and hardware | **~R1,580** |
 
 ### Core Technical Design
 
