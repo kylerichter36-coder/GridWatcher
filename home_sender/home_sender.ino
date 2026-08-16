@@ -182,8 +182,7 @@ void checkGitHubAutoOTA() {
 // ==============================================================================
 #define SERIAL_VERBOSE    true    // Set false to suppress per-packet TX log spam
 #define TX_INTERVAL_MS    2000
-#define TX_POWER_DBM      9    // +5 dBi antenna: 9dBm TX + 5dBi - 1dB loss = ~13dBm EIRP = ~12mW ERP
-                               // Legal limit is 25mW ERP. Change to 22 ONLY if using a simple wire/0dBi antenna.
+#define TX_POWER_DBM      22   // Max +22 dBm (160mW) for maximum range & penetration through walls
 #define CELL_STALE_MS     30000
 
 // LoRa radio config — MUST match exactly on sender and handheld
@@ -200,6 +199,7 @@ bool senderUpdatePending  = false;   // sender own firmware staged, waiting for 
 bool handheldConfirmed    = false;   // handheld reported OK
 bool bridgeConfirmed      = false;   // phone bridge reported OK
 bool loraTxEnabled        = true;    // Safety switch: pause LoRa TX when tuning/working on antenna
+int currentTxPowerDbm     = TX_POWER_DBM;
 
 // Grid State
 float lastVoltage         = 0.0;
@@ -670,12 +670,12 @@ void handleSignal() {
 }
 
 void handleStatus() {
-  char json[480];
+  char json[500];
   snprintf(json, sizeof(json),
     "{\"voltage\":%.1f,\"frequency\":%.2f,\"cellSignalDbm\":%d,\"phoneBatteryPercent\":%d,"
     "\"batteryPercent\":%d,\"packetSequence\":%lu,\"staConnected\":%s,\"staIP\":\"%s\","
     "\"txFails\":%d,\"reinitBackoffMs\":%lu,\"cellFresh\":%s,\"mlVersion\":%d,\"mlBuildTime\":\"%s\","
-    "\"loraTxEnabled\":%s}",
+    "\"loraTxEnabled\":%s,\"txPowerDbm\":%d}",
     lastVoltage, lastFrequency,
     cellSignalDbm, phoneBatteryPercent, batteryPercent,
     packetSequence,
@@ -686,7 +686,8 @@ void handleStatus() {
     (millis() - lastCellUpdate < CELL_STALE_MS) ? "true" : "false",
     ML_MODEL_VERSION,
     ML_MODEL_BUILD_TIME,
-    loraTxEnabled ? "true" : "false");
+    loraTxEnabled ? "true" : "false",
+    currentTxPowerDbm);
   server.send(200, "application/json", json);
 }
 
@@ -715,6 +716,7 @@ void setup() {
   if (state == RADIOLIB_ERR_NONE) {
     Serial.println("[SX1262] Success!");
     radio.setDio2AsRfSwitch(true);
+    radio.setCurrentLimit(140.0);
     lastSuccessfulTx  = millis();
     lastReinitAttempt = millis();
     Serial.println("============================================================");
@@ -856,6 +858,22 @@ void setup() {
     }
     char buf[100];
     snprintf(buf, sizeof(buf), "{\"loraTxEnabled\":%s}", loraTxEnabled ? "true" : "false");
+    server.send(200, "application/json", buf);
+  });
+
+  // Dynamic LoRa Output Power Tuning Endpoint (2 dBm to 22 dBm)
+  server.on("/lora-power", HTTP_GET, []() {
+    if (server.hasArg("val")) {
+      int pwr = server.arg("val").toInt();
+      pwr = constrain(pwr, 2, 22);
+      int res = radio.setOutputPower(pwr);
+      if (res == RADIOLIB_ERR_NONE) {
+        currentTxPowerDbm = pwr;
+        Serial.printf("[LoRa] TX Power set to +%d dBm\n", currentTxPowerDbm);
+      }
+    }
+    char buf[80];
+    snprintf(buf, sizeof(buf), "{\"txPowerDbm\":%d}", currentTxPowerDbm);
     server.send(200, "application/json", buf);
   });
 
