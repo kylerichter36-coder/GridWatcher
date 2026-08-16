@@ -115,14 +115,15 @@ void checkGitHubAutoOTA() {
   HTTPClient otaHttp;
   int httpCode = -1;
 
+  WiFiClient netClient;
+  WiFiClientSecure secClient;
+
   if (isHttps) {
-    WiFiClientSecure secClient;
     secClient.setInsecure();
     if (otaHttp.begin(secClient, binUrl)) {
       httpCode = otaHttp.GET();
     }
   } else {
-    WiFiClient netClient;
     if (otaHttp.begin(netClient, binUrl)) {
       httpCode = otaHttp.GET();
     }
