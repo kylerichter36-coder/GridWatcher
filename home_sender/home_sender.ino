@@ -199,6 +199,7 @@ bool bridgeUpdateReady    = false;   // bridge.py uploaded and waiting
 bool senderUpdatePending  = false;   // sender own firmware staged, waiting for others
 bool handheldConfirmed    = false;   // handheld reported OK
 bool bridgeConfirmed      = false;   // phone bridge reported OK
+bool loraTxEnabled        = true;    // Safety switch: pause LoRa TX when tuning/working on antenna
 
 // Grid State
 float lastVoltage         = 0.0;
@@ -669,11 +670,12 @@ void handleSignal() {
 }
 
 void handleStatus() {
-  char json[450];
+  char json[480];
   snprintf(json, sizeof(json),
     "{\"voltage\":%.1f,\"frequency\":%.2f,\"cellSignalDbm\":%d,\"phoneBatteryPercent\":%d,"
     "\"batteryPercent\":%d,\"packetSequence\":%lu,\"staConnected\":%s,\"staIP\":\"%s\","
-    "\"txFails\":%d,\"reinitBackoffMs\":%lu,\"cellFresh\":%s,\"mlVersion\":%d,\"mlBuildTime\":\"%s\"}",
+    "\"txFails\":%d,\"reinitBackoffMs\":%lu,\"cellFresh\":%s,\"mlVersion\":%d,\"mlBuildTime\":\"%s\","
+    "\"loraTxEnabled\":%s}",
     lastVoltage, lastFrequency,
     cellSignalDbm, phoneBatteryPercent, batteryPercent,
     packetSequence,
@@ -683,7 +685,8 @@ void handleStatus() {
     reinitBackoffMs,
     (millis() - lastCellUpdate < CELL_STALE_MS) ? "true" : "false",
     ML_MODEL_VERSION,
-    ML_MODEL_BUILD_TIME);
+    ML_MODEL_BUILD_TIME,
+    loraTxEnabled ? "true" : "false");
   server.send(200, "application/json", json);
 }
 
@@ -814,6 +817,46 @@ void setup() {
     blinkDebugLED(5);
     server.send(200, "application/json", "{\"status\":\"OTA update triggered\"}");
     checkGitHubAutoOTA();
+  });
+
+  // LoRa Pause / Resume Endpoint (Antenna Tuning Safety Mode)
+  server.on("/lora-pause", HTTP_GET, []() {
+    if (server.hasArg("state")) {
+      String st = server.arg("state");
+      if (st == "on" || st == "true" || st == "1") {
+        loraTxEnabled = false;
+        radio.standby();
+        Serial.println("[LoRa] PAUSED: Radio in Standby (Safe antenna tuning mode)");
+      } else {
+        loraTxEnabled = true;
+        Serial.println("[LoRa] RESUMED: Radio transmission re-enabled");
+      }
+    } else {
+      loraTxEnabled = !loraTxEnabled;
+      if (!loraTxEnabled) radio.standby();
+    }
+    char buf[100];
+    snprintf(buf, sizeof(buf), "{\"loraTxEnabled\":%s}", loraTxEnabled ? "true" : "false");
+    server.send(200, "application/json", buf);
+  });
+  server.on("/lora-pause", HTTP_POST, []() {
+    if (server.hasArg("state")) {
+      String st = server.arg("state");
+      if (st == "on" || st == "true" || st == "1") {
+        loraTxEnabled = false;
+        radio.standby();
+        Serial.println("[LoRa] PAUSED: Radio in Standby (Safe antenna tuning mode)");
+      } else {
+        loraTxEnabled = true;
+        Serial.println("[LoRa] RESUMED: Radio transmission re-enabled");
+      }
+    } else {
+      loraTxEnabled = !loraTxEnabled;
+      if (!loraTxEnabled) radio.standby();
+    }
+    char buf[100];
+    snprintf(buf, sizeof(buf), "{\"loraTxEnabled\":%s}", loraTxEnabled ? "true" : "false");
+    server.send(200, "application/json", buf);
   });
 
   // ---- OTA Hub: serve dashboard ----
@@ -1072,22 +1115,28 @@ void loop() {
                       packetSequence, lastVoltage, lastFrequency, (int)lastGridStatus, (int)lastRiskScore, isRingBufferWarmedUp() ? "YES" : "NO", (int)pktRssi);
       }
 
-      int state = radio.transmit((uint8_t*)&pkt, sizeof(GridPacket));
+      if (loraTxEnabled) {
+        int state = radio.transmit((uint8_t*)&pkt, sizeof(GridPacket));
 
-      if (state == RADIOLIB_ERR_NONE) {
-        if (SERIAL_VERBOSE) Serial.println("  -> OK (12-byte Binary Packet Sent)");
-        lastSuccessfulTx   = millis();
-        consecutiveTxFails = 0;
-        reinitBackoffMs    = 10000;
-        // Short LED blip — TX success
-        digitalWrite(LED_PIN, HIGH);
-        ledOffMs = millis() + LED_TX_MS;
+        if (state == RADIOLIB_ERR_NONE) {
+          if (SERIAL_VERBOSE) Serial.println("  -> OK (12-byte Binary Packet Sent)");
+          lastSuccessfulTx   = millis();
+          consecutiveTxFails = 0;
+          reinitBackoffMs    = 10000;
+          // Short LED blip — TX success
+          digitalWrite(LED_PIN, HIGH);
+          ledOffMs = millis() + LED_TX_MS;
+        } else {
+          Serial.printf("TX FAIL (Code: %d)\n", state);
+          consecutiveTxFails++;
+          // Longer LED pulse — TX error
+          digitalWrite(LED_PIN, HIGH);
+          ledOffMs = millis() + LED_ERR_MS;
+        }
       } else {
-        Serial.printf("TX FAIL (Code: %d)\n", state);
-        consecutiveTxFails++;
-        // Longer LED pulse — TX error
-        digitalWrite(LED_PIN, HIGH);
-        ledOffMs = millis() + LED_ERR_MS;
+        if (SERIAL_VERBOSE && (packetSequence % 5 == 0)) {
+          Serial.println("[LoRa] PAUSED: Radio in Standby (Safe antenna tuning mode)");
+        }
       }
     }
 
