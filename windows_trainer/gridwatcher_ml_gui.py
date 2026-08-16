@@ -11,14 +11,16 @@ from sklearn.ensemble import RandomForestClassifier
 try:
     from PyQt5.QtWidgets import (
         QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-        QLabel, QTextEdit, QProgressBar, QPushButton, QFrame
+        QLabel, QTextEdit, QProgressBar, QPushButton, QFrame, QDialog,
+        QSlider, QGroupBox, QGridLayout
     )
     from PyQt5.QtCore import Qt, QThread, pyqtSignal
     from PyQt5.QtGui import QFont
 except ImportError:
     from PyQt6.QtWidgets import (
         QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-        QLabel, QTextEdit, QProgressBar, QPushButton, QFrame
+        QLabel, QTextEdit, QProgressBar, QPushButton, QFrame, QDialog,
+        QSlider, QGroupBox, QGridLayout
     )
     from PyQt6.QtCore import Qt, QThread, pyqtSignal
     from PyQt6.QtGui import QFont
@@ -587,6 +589,218 @@ inline float predictGridRisk(float voltage, float frequency, float signal, float
             self.log_signal.emit(f"\n[ERROR] Process failed: {e}")
             self.finished_signal.emit(False, str(e))
 
+class MLBrainDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("GridWatcher ML Brain — Real-Time Model Simulator")
+        self.setFixedSize(850, 620)
+        self.setStyleSheet("""
+            QDialog { background-color: #0b0f19; }
+            QLabel { color: #f1f5f9; font-family: 'Segoe UI', Arial, sans-serif; }
+            QGroupBox { border: 1px solid #1e293b; border-radius: 8px; margin-top: 10px; font-weight: bold; color: #38bdf8; font-size: 12px; padding-top: 14px; }
+            QGroupBox::title { subcontrol-origin: margin; subcontrol-position: top left; padding: 0 6px; }
+            QSlider::groove:horizontal { height: 6px; background: #1e293b; border-radius: 3px; }
+            QSlider::sub-page:horizontal { background: #38bdf8; border-radius: 3px; }
+            QSlider::handle:horizontal { background: #f8fafc; border: 1px solid #38bdf8; width: 16px; margin-top: -5px; margin-bottom: -5px; border-radius: 8px; }
+            QPushButton.scenario_btn { background-color: #1e293b; color: #f8fafc; font-size: 11px; font-weight: 600; border-radius: 5px; padding: 6px 10px; border: 1px solid #334155; }
+            QPushButton.scenario_btn:hover { background-color: #334155; border-color: #38bdf8; }
+            QTextEdit { background-color: #111827; color: #a5f3fc; border: 1px solid #1e293b; border-radius: 6px; font-family: 'Consolas', monospace; font-size: 11px; padding: 8px; }
+        """)
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setSpacing(16)
+
+        # Left Column: Sliders & Controls
+        left_box = QWidget()
+        left_layout = QVBoxLayout(left_box)
+        left_layout.setContentsMargins(0, 0, 0, 0)
+        left_layout.setSpacing(10)
+
+        # Quick Scenarios Frame
+        sc_group = QGroupBox("Quick Grid Scenarios")
+        sc_layout = QHBoxLayout(sc_group)
+        
+        btn_norm = QPushButton("1. Normal (230V)", self)
+        btn_norm.setProperty("class", "scenario_btn")
+        btn_norm.clicked.connect(lambda: self.load_scenario(230.2, 50.01, -95.0, 0.02, 0.01, 0.45, 0.05, 0.01))
+        sc_layout.addWidget(btn_norm)
+
+        btn_sag = QPushButton("2. Sag/Brownout (204V)", self)
+        btn_sag.setProperty("class", "scenario_btn")
+        btn_sag.clicked.connect(lambda: self.load_scenario(204.5, 49.62, -98.0, -0.85, -0.05, 3.42, 0.85, -0.62))
+        sc_layout.addWidget(btn_sag)
+
+        btn_jit = QPushButton("3. Jitter Storm (52.4Hz)", self)
+        btn_jit.setProperty("class", "scenario_btn")
+        btn_jit.clicked.connect(lambda: self.load_scenario(222.0, 52.40, -104.0, -0.10, 0.35, 1.80, 2.15, -0.05))
+        sc_layout.addWidget(btn_jit)
+
+        btn_out = QPushButton("4. Blackout (192V)", self)
+        btn_out.setProperty("class", "scenario_btn")
+        btn_out.clicked.connect(lambda: self.load_scenario(192.0, 48.90, -110.0, -1.80, -0.25, 4.80, 1.95, -1.20))
+        sc_layout.addWidget(btn_out)
+
+        left_layout.addWidget(sc_group)
+
+        # Slider Group
+        sl_group = QGroupBox("Live Electrical Input Signals")
+        sl_layout = QGridLayout(sl_group)
+        sl_layout.setSpacing(8)
+
+        self.sliders = {}
+        self.val_labels = {}
+
+        params = [
+            ("voltage",    "Voltage (V)",               1500, 2600, 2300, 10.0, "V"),
+            ("frequency",  "Frequency (Hz)",            4500, 5500, 5000, 100.0, "Hz"),
+            ("signal",     "Cell Signal RSRP (dBm)",    -120, -60,  -95,  1.0, "dBm"),
+            ("dv",         "10s dV/dt (V/s)",           -300, 300,  0,    100.0, "V/s"),
+            ("df",         "10s dF/dt (Hz/s)",          -100, 100,  0,    100.0, "Hz/s"),
+            ("v_std",      "30s Volt StdDev (V)",       0,    1000, 50,   100.0, "V"),
+            ("f_std",      "30s Freq StdDev (Hz)",      0,    500,  10,   100.0, "Hz"),
+            ("v_slope",    "30s Volt Slope (V/s)",      -300, 300,  0,    100.0, "V/s"),
+        ]
+
+        for row, (key, title, min_v, max_v, def_v, scale, unit) in enumerate(params):
+            lbl = QLabel(title)
+            lbl.setFont(QFont("Segoe UI", 9))
+            
+            slider = QSlider(Qt.Orientation.Horizontal if hasattr(Qt, 'Orientation') else Qt.Horizontal)
+            slider.setRange(min_v, max_v)
+            slider.setValue(def_v)
+            
+            val_lbl = QLabel(f"{def_v/scale:.2f} {unit}")
+            val_lbl.setFont(QFont("Consolas", 9, QFont.Weight.Bold))
+            val_lbl.setStyleSheet("color: #38bdf8;")
+            val_lbl.setFixedWidth(85)
+            
+            slider.valueChanged.connect(lambda _, k=key, s=scale, u=unit, vl=val_lbl: self.on_slider_change(k, s, u, vl))
+            
+            sl_layout.addWidget(lbl, row, 0)
+            sl_layout.addWidget(slider, row, 1)
+            sl_layout.addWidget(val_lbl, row, 2)
+            
+            self.sliders[key] = (slider, scale, unit)
+            self.val_labels[key] = val_lbl
+
+        left_layout.addWidget(sl_group)
+        layout.addWidget(left_box, 6)
+
+        # Right Column: Model Brain Evaluation & Trees
+        right_box = QWidget()
+        right_layout = QVBoxLayout(right_box)
+        right_layout.setContentsMargins(0, 0, 0, 0)
+        right_layout.setSpacing(12)
+
+        # Risk Gauge Header Box
+        gauge_group = QGroupBox("Model Decision & Risk Gauge")
+        gauge_layout = QVBoxLayout(gauge_group)
+        
+        self.lbl_risk_score = QLabel("0.0% RISK")
+        self.lbl_risk_score.setFont(QFont("Segoe UI", 24, QFont.Weight.Bold))
+        self.lbl_risk_score.setAlignment(Qt.AlignmentFlag.AlignCenter if hasattr(Qt, 'AlignmentFlag') else Qt.AlignCenter)
+        self.lbl_risk_score.setStyleSheet("color: #4ade80;")
+        gauge_layout.addWidget(self.lbl_risk_score)
+
+        self.lbl_action = QLabel("STATUS: NORMAL (SAFE)")
+        self.lbl_action.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+        self.lbl_action.setAlignment(Qt.AlignmentFlag.AlignCenter if hasattr(Qt, 'AlignmentFlag') else Qt.AlignCenter)
+        self.lbl_action.setStyleSheet("color: #94a3b8;")
+        gauge_layout.addWidget(self.lbl_action)
+
+        self.lbl_trees = QLabel("Tree 0: 0.0% | Tree 1: 0.0% | Tree 2: 0.0%")
+        self.lbl_trees.setFont(QFont("Consolas", 10))
+        self.lbl_trees.setAlignment(Qt.AlignmentFlag.AlignCenter if hasattr(Qt, 'AlignmentFlag') else Qt.AlignCenter)
+        self.lbl_trees.setStyleSheet("color: #cbd5e1;")
+        gauge_layout.addWidget(self.lbl_trees)
+
+        right_layout.addWidget(gauge_group)
+
+        # Decision Tree Rules Display
+        rules_group = QGroupBox("Embedded C++ Tree Rules (grid_model.h)")
+        rules_layout = QVBoxLayout(rules_group)
+        self.txt_rules = QTextEdit()
+        self.txt_rules.setReadOnly(True)
+        self.load_rules_text()
+        rules_layout.addWidget(self.txt_rules)
+        right_layout.addWidget(rules_group)
+
+        layout.addWidget(right_box, 5)
+        self.update_simulation()
+
+    def on_slider_change(self, key, scale, unit, val_lbl):
+        slider, _, _ = self.sliders[key]
+        val = slider.value() / scale
+        val_lbl.setText(f"{val:.2f} {unit}")
+        self.update_simulation()
+
+    def load_scenario(self, v, f, s, dv, df, v_std, f_std, v_slope):
+        vals = {"voltage": v, "frequency": f, "signal": s, "dv": dv, "df": df, "v_std": v_std, "f_std": f_std, "v_slope": v_slope}
+        for k, val in vals.items():
+            if k in self.sliders:
+                slider, scale, unit = self.sliders[k]
+                slider.blockSignals(True)
+                slider.setValue(int(val * scale))
+                slider.blockSignals(False)
+                self.val_labels[k].setText(f"{val:.2f} {unit}")
+        self.update_simulation()
+
+    def load_rules_text(self):
+        if os.path.exists(MODEL_HEADER_PATH):
+            try:
+                with open(MODEL_HEADER_PATH, "r", encoding="utf-8") as f:
+                    self.txt_rules.setPlainText(f.read())
+                return
+            except:
+                pass
+        self.txt_rules.setPlainText("// grid_model.h not found.")
+
+    def update_simulation(self):
+        v = self.sliders["voltage"][0].value() / self.sliders["voltage"][1]
+        f = self.sliders["frequency"][0].value() / self.sliders["frequency"][1]
+        s = self.sliders["signal"][0].value() / self.sliders["signal"][1]
+        dv = self.sliders["dv"][0].value() / self.sliders["dv"][1]
+        df = self.sliders["df"][0].value() / self.sliders["df"][1]
+        v_std = self.sliders["v_std"][0].value() / self.sliders["v_std"][1]
+        f_std = self.sliders["f_std"][0].value() / self.sliders["f_std"][1]
+        v_slope = self.sliders["v_slope"][0].value() / self.sliders["v_slope"][1]
+
+        # Tree 0 (v33 Logic)
+        if f_std <= 1.8223:
+            p0 = (0.0 if f <= 49.4950 else 0.8389) if df <= 0.0776 else ((0.0678 if f <= 50.4950 else 0.8382) if v_std <= 2.8910 else (0.8841 if df <= 0.2227 else 0.0))
+        else:
+            p0 = (0.8523 if f_std <= 2.1158 else 0.0) if df <= -0.1983 else (0.0177 if f_std <= 2.4578 else 0.8407)
+
+        # Tree 1
+        if f_std <= 1.8223:
+            p1 = (0.0 if f <= 49.4950 else 0.8389) if df <= 0.0776 else ((0.0684 if f <= 50.4950 else 0.8382) if v_std <= 2.8910 else (0.8841 if df <= 0.2227 else 0.0))
+        else:
+            p1 = (0.8523 if f_std <= 2.1158 else 0.0) if df <= -0.1983 else (0.0177 if f_std <= 2.4578 else 0.8407)
+
+        # Tree 2
+        if f_std <= 1.8223:
+            p2 = (0.0 if f <= 49.4950 else 0.8389) if df <= 0.0776 else ((0.0684 if f <= 50.4950 else 0.8382) if v_std <= 2.8910 else (0.8841 if df <= 0.2227 else 0.0))
+        else:
+            p2 = (0.8523 if f_std <= 2.1158 else 0.0) if df <= -0.1983 else (0.0177 if f_std <= 2.4578 else 0.8407)
+
+        risk = (p0 + p1 + p2) / 3.0 * 100.0
+        self.lbl_trees.setText(f"Tree 0: {p0*100:.1f}% | Tree 1: {p1*100:.1f}% | Tree 2: {p2*100:.1f}%")
+        self.lbl_risk_score.setText(f"{risk:.1f}% RISK")
+
+        if risk >= 75.0 or v < 180.0:
+            self.lbl_risk_score.setStyleSheet("color: #ef4444;")
+            self.lbl_action.setText("ACTION: 📲 PREDICTIVE SMS ALERT TRIGGERED!")
+            self.lbl_action.setStyleSheet("color: #ef4444; font-weight: bold;")
+        elif risk >= 40.0:
+            self.lbl_risk_score.setStyleSheet("color: #facc15;")
+            self.lbl_action.setText("ACTION: ⚠️ ELEVATED RISK LOGGED")
+            self.lbl_action.setStyleSheet("color: #facc15; font-weight: bold;")
+        else:
+            self.lbl_risk_score.setStyleSheet("color: #4ade80;")
+            self.lbl_action.setText("ACTION: NORMAL (GRID STABLE)")
+            self.lbl_action.setStyleSheet("color: #4ade80;")
+
 class IndustrialMLDashboard(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -598,9 +812,11 @@ class IndustrialMLDashboard(QMainWindow):
             QTextEdit { background-color: #111827; color: #38bdf8; border: 1px solid #1e293b; border-radius: 6px; font-family: 'Consolas', monospace; font-size: 13px; padding: 10px; }
             QProgressBar { border: 1px solid #1e293b; border-radius: 6px; background-color: #111827; text-align: center; color: #f8fafc; font-weight: 600; font-size: 12px; }
             QProgressBar::chunk { background-color: #2563eb; border-radius: 5px; }
-            QPushButton#btn_start { background-color: #16a34a; color: #ffffff; font-weight: 600; font-size: 13px; border-radius: 6px; padding: 10px 20px; border: none; }
+            QPushButton#btn_start { background-color: #16a34a; color: #ffffff; font-weight: 600; font-size: 13px; border-radius: 6px; padding: 10px 16px; border: none; }
             QPushButton#btn_start:hover { background-color: #15803d; }
-            QPushButton#btn_cancel { background-color: #dc2626; color: #ffffff; font-weight: 600; font-size: 13px; border-radius: 6px; padding: 10px 20px; border: none; }
+            QPushButton#btn_brain { background-color: #0284c7; color: #ffffff; font-weight: 600; font-size: 13px; border-radius: 6px; padding: 10px 16px; border: none; }
+            QPushButton#btn_brain:hover { background-color: #0369a1; }
+            QPushButton#btn_cancel { background-color: #dc2626; color: #ffffff; font-weight: 600; font-size: 13px; border-radius: 6px; padding: 10px 16px; border: none; }
             QPushButton#btn_cancel:hover { background-color: #b91c1c; }
             QPushButton#btn_close { background-color: #2563eb; color: #ffffff; font-weight: 600; font-size: 13px; border-radius: 6px; padding: 10px 20px; border: none; }
             QPushButton#btn_close:hover { background-color: #1d4ed8; }
@@ -634,15 +850,21 @@ class IndustrialMLDashboard(QMainWindow):
 
         main_layout.addWidget(header_frame)
 
-        # Action Buttons Layout (Start vs Cancel)
+        # Action Buttons Layout (Start vs View Brain vs Cancel)
         self.action_frame = QFrame(self)
         action_layout = QHBoxLayout(self.action_frame)
         action_layout.setContentsMargins(8, 8, 8, 8)
+        action_layout.setSpacing(10)
 
-        self.btn_start = QPushButton("START RETRAINING & GITHUB SYNC", self)
+        self.btn_start = QPushButton("START RETRAINING", self)
         self.btn_start.setObjectName("btn_start")
         self.btn_start.clicked.connect(self.start_pipeline)
         action_layout.addWidget(self.btn_start)
+
+        self.btn_brain = QPushButton("VIEW ML BRAIN", self)
+        self.btn_brain.setObjectName("btn_brain")
+        self.btn_brain.clicked.connect(self.open_brain_viewer)
+        action_layout.addWidget(self.btn_brain)
 
         self.btn_cancel = QPushButton("CANCEL", self)
         self.btn_cancel.setObjectName("btn_cancel")
@@ -682,6 +904,10 @@ class IndustrialMLDashboard(QMainWindow):
 
         # Center on Screen
         self.center_on_screen()
+
+    def open_brain_viewer(self):
+        dlg = MLBrainDialog(self)
+        dlg.exec() if hasattr(dlg, 'exec') else dlg.exec_()
 
     def center_on_screen(self):
         screen = QApplication.primaryScreen().geometry()

@@ -659,8 +659,9 @@ void handleSignal() {
     Serial.printf("[WiFi] Cell: %ddBm | Phone Batt: %d%% | Grid: %.1fV\n",
                   cellSignalDbm, phoneBatteryPercent, lastVoltage);
                   
-    char resp[100];
-    snprintf(resp, sizeof(resp), "{\"voltage\":%.1f,\"frequency\":%.2f}", lastVoltage, lastFrequency);
+    char resp[160];
+    snprintf(resp, sizeof(resp), "{\"voltage\":%.1f,\"frequency\":%.2f,\"riskScore\":%d,\"status\":%d}",
+             lastVoltage, lastFrequency, lastRiskScore, (int)lastGridStatus);
     server.send(200, "application/json", resp);
   } else {
     server.send(400, "text/plain", "missing value param");

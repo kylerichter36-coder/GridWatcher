@@ -35,6 +35,7 @@ IS_TERMUX = "TERMUX_VERSION" in os.environ or os.path.exists("/data/data/com.ter
 # SMS Alert Settings (Only used when running in Termux)
 SMS_TARGET_NUMBER = "0740999098"
 _has_sent_outage_sms = False
+_has_sent_predictive_sms = False
 
 # If in Termux, CSV is saved directly to Android's Download folder
 if IS_TERMUX:
@@ -326,26 +327,40 @@ def send_signal_to_esp32(dbm, phone_batt):
                     resp_data = response.read().decode()
                     try:
                         grid = json.loads(resp_data)
-                        voltage = grid.get("voltage", 230.0)
-                        frequency = grid.get("frequency", 50.0)
-                        print(f"[{_ts()}] [Direct via {ip}] Cell {dbm}dBm | PhoneBatt {phone_batt}% -> ESP32 OK (Grid: {voltage}V, {frequency}Hz)", flush=True)
+                        voltage = float(grid.get("voltage", 230.0))
+                        frequency = float(grid.get("frequency", 50.0))
+                        risk_score = int(grid.get("riskScore", 0))
+                        status_code = int(grid.get("status", 0))
+                        print(f"[{_ts()}] [Direct via {ip}] Cell {dbm}dBm | PhoneBatt {phone_batt}% -> ESP32 OK (Grid: {voltage}V, {frequency}Hz, Risk: {risk_score}%)", flush=True)
                         
-                        # Trigger SMS alert if simulated outage (voltage == 0) or actual drop
+                        # 1. Predictive Early Warning SMS (high ML risk before actual voltage collapse)
+                        if risk_score >= 75 and voltage >= 200.0:
+                            if not _has_sent_predictive_sms:
+                                _has_sent_predictive_sms = True
+                                try:
+                                    msg = f"GridWatcher PREDICTIVE WARNING: High Outage Risk ({risk_score}%) detected! Grid is unstable ({voltage}V, {frequency}Hz)."
+                                    subprocess.run(["termux-sms-send", "-n", SMS_TARGET_NUMBER, msg], timeout=5)
+                                    print(f"[{_ts()}] [SMS Alert] Predictive warning SMS sent to {SMS_TARGET_NUMBER}", flush=True)
+                                except Exception as sms_err:
+                                    print(f"[{_ts()}] Failed to send predictive SMS: {sms_err}", flush=True)
+
+                        # 2. Hard Outage/Sag SMS (voltage drops below threshold)
                         if voltage < 200.0:
                             if not _has_sent_outage_sms:
                                 _has_sent_outage_sms = True
                                 try:
-                                    msg = f"GridWatcher ALERT: Outage detected! Voltage is {voltage}V. Signal: {dbm}dBm."
+                                    msg = f"GridWatcher ALERT: Outage/Brownout detected! Voltage is {voltage}V. Signal: {dbm}dBm."
                                     subprocess.run(["termux-sms-send", "-n", SMS_TARGET_NUMBER, msg], timeout=5)
                                     print(f"[{_ts()}] [SMS Alert] Outage alert SMS sent to {SMS_TARGET_NUMBER}", flush=True)
                                 except Exception as sms_err:
-                                    print(f"[{_ts()}] Failed to send SMS: {sms_err}", flush=True)
-                        else:
-                            # Reset SMS alert flag when voltage returns to normal
+                                    print(f"[{_ts()}] Failed to send outage SMS: {sms_err}", flush=True)
+                        
+                        # Reset flags when grid returns to normal stable state
+                        if voltage >= 210.0 and risk_score < 40:
                             _has_sent_outage_sms = False
-                    except Exception:
+                            _has_sent_predictive_sms = False
+                    except Exception as parse_err:
                         print(f"[{_ts()}] [Direct via {ip}] Cell {dbm}dBm | PhoneBatt {phone_batt}% -> ESP32 OK", flush=True)
-                        _has_sent_outage_sms = False
                         
                     log_telemetry_row()
                     return True
