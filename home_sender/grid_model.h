@@ -1,5 +1,5 @@
 // Auto-generated GridWatcher Random Forest ML Decision Trees
-// Retrained on: 2026-08-20 06:24:03
+// Retrained on: 2026-08-21 06:32:29
 // Train Acc: 85.02% | 80/20 Test Holdout Acc: 85.49%
 
 #ifndef GRID_MODEL_H
@@ -16,11 +16,11 @@ enum GridStatus : uint8_t {
 };
 
 #ifndef ML_MODEL_VERSION
-#define ML_MODEL_VERSION 39
+#define ML_MODEL_VERSION 40
 #endif
 
 #ifndef ML_MODEL_BUILD_TIME
-#define ML_MODEL_BUILD_TIME "2026-08-20 06:24:03"
+#define ML_MODEL_BUILD_TIME "2026-08-21 06:32:29"
 #endif
 
 #ifndef ML_MODEL_ACCURACY
