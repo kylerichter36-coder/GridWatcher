@@ -1,0 +1,138 @@
+#VRML V2.0 utf8
+# XTX SD-NAND LGA-8-EP 6x8mm 3D Model
+# (c) 2026 Kyle Richter / GridWatcher
+
+Group {
+  children [
+    # Black Epoxy Body (6.0 x 8.0 x 0.75 mm)
+    Transform {
+      translation 0 0 0.425
+      children [
+        Shape {
+          appearance Appearance {
+            material Material {
+              diffuseColor 0.12 0.12 0.12
+              specularColor 0.25 0.25 0.25
+              shininess 0.3
+            }
+          }
+          geometry Box {
+            size 6.0 8.0 0.75
+          }
+        }
+      ]
+    }
+    # Pin 1 Marker Dot
+    Transform {
+      translation -2.0 2.8 0.805
+      children [
+        Shape {
+          appearance Appearance {
+            material Material {
+              diffuseColor 0.88 0.88 0.85
+              emissiveColor 0.1 0.1 0.1
+              shininess 0.5
+            }
+          }
+          geometry Cylinder {
+            radius 0.25
+            height 0.02
+          }
+        }
+      ]
+    }
+    # Central Exposed Thermal Pad (4.5 x 4.0 x 0.05 mm)
+    Transform {
+      translation 0 0 0.025
+      children [
+        Shape {
+          appearance Appearance {
+            material Material {
+              diffuseColor 0.82 0.82 0.84
+              specularColor 0.9 0.9 0.95
+              shininess 0.8
+            }
+          }
+          geometry Box {
+            size 4.5 4.0 0.05
+          }
+        }
+      ]
+    }
+    # 8 SMT Contact Pads (0.65 x 1.15 x 0.05 mm)
+    # Pins 1..4 (Y = +3.8)
+    Transform {
+      translation -1.905 3.8 0.025
+      children [
+        Shape {
+          appearance Appearance { material Material { diffuseColor 0.82 0.82 0.84 specularColor 0.9 0.9 0.95 shininess 0.8 } }
+          geometry Box { size 0.65 1.15 0.05 }
+        }
+      ]
+    }
+    Transform {
+      translation -0.635 3.8 0.025
+      children [
+        Shape {
+          appearance Appearance { material Material { diffuseColor 0.82 0.82 0.84 specularColor 0.9 0.9 0.95 shininess 0.8 } }
+          geometry Box { size 0.65 1.15 0.05 }
+        }
+      ]
+    }
+    Transform {
+      translation 0.635 3.8 0.025
+      children [
+        Shape {
+          appearance Appearance { material Material { diffuseColor 0.82 0.82 0.84 specularColor 0.9 0.9 0.95 shininess 0.8 } }
+          geometry Box { size 0.65 1.15 0.05 }
+        }
+      ]
+    }
+    Transform {
+      translation 1.905 3.8 0.025
+      children [
+        Shape {
+          appearance Appearance { material Material { diffuseColor 0.82 0.82 0.84 specularColor 0.9 0.9 0.95 shininess 0.8 } }
+          geometry Box { size 0.65 1.15 0.05 }
+        }
+      ]
+    }
+    # Pins 5..8 (Y = -3.8)
+    Transform {
+      translation 1.905 -3.8 0.025
+      children [
+        Shape {
+          appearance Appearance { material Material { diffuseColor 0.82 0.82 0.84 specularColor 0.9 0.9 0.95 shininess 0.8 } }
+          geometry Box { size 0.65 1.15 0.05 }
+        }
+      ]
+    }
+    Transform {
+      translation 0.635 -3.8 0.025
+      children [
+        Shape {
+          appearance Appearance { material Material { diffuseColor 0.82 0.82 0.84 specularColor 0.9 0.9 0.95 shininess 0.8 } }
+          geometry Box { size 0.65 1.15 0.05 }
+        }
+      ]
+    }
+    Transform {
+      translation -0.635 -3.8 0.025
+      children [
+        Shape {
+          appearance Appearance { material Material { diffuseColor 0.82 0.82 0.84 specularColor 0.9 0.9 0.95 shininess 0.8 } }
+          geometry Box { size 0.65 1.15 0.05 }
+        }
+      ]
+    }
+    Transform {
+      translation -1.905 -3.8 0.025
+      children [
+        Shape {
+          appearance Appearance { material Material { diffuseColor 0.82 0.82 0.84 specularColor 0.9 0.9 0.95 shininess 0.8 } }
+          geometry Box { size 0.65 1.15 0.05 }
+        }
+      ]
+    }
+  ]
+}
