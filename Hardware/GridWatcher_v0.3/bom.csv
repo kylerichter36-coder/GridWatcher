@@ -1,0 +1,33 @@
+Item,Designator,Description,Qty,Category / Sourcing,Unit Price (USD),Total (USD),Product Link / Sourcing Notes
+1,U7,XTX XTSDG08GWSIGA 1GB (8Gb) SD-NAND LGA-8 Flash,2,JLCPCB SMT (Extended),40.38,80.75,https://www.lcsc.com/search?q=C25836657
+2,U8,SIMCom A7670E-FASE 4G LTE Cat-1 Cellular Modem,2,JLCPCB SMT (Extended),10.59,21.18,https://www.lcsc.com/search?q=C7435296
+3,U6,"Espressif ESP32-S3-WROOM-1-N16R8 (16MB Flash, 8MB PSRAM)",2,JLCPCB SMT (Extended),5.36,10.72,https://www.lcsc.com/search?q=C2913202
+4,U3,Texas Instruments BQ24074RGTR Li-ion Dynamic Power-Path PMIC,2,JLCPCB SMT (Extended),2.53,5.05,https://www.lcsc.com/search?q=C54313
+5,U5,Analog Devices / Maxim MAX17048G+T10 I2C Battery Fuel Gauge,2,JLCPCB SMT (Extended),2.02,4.03,https://www.lcsc.com/search?q=C2682616
+6,C19,AVX / Kyocera TAJD477K006RNJ 470uF 6.3V Case D Tantalum Cap,2,JLCPCB SMT (Extended),1.22,2.44,https://www.lcsc.com/search?q=C7229
+7,U2,Shanghai Belling BL0939 Dual-Channel Energy Metering IC,2,JLCPCB SMT (Extended),0.94,1.89,https://www.lcsc.com/search?q=C2836697
+8,J2,BOOMELE Hinged Nano-SIM 6PIN Socket Push-Pull,2,JLCPCB SMT (Extended),0.61,1.21,https://www.lcsc.com/search?q=C2963104
+9,U9,Texas Instruments TXS0102DCUR Bidirectional 1.8V-3.3V Shifter,5,JLCPCB SMT (Extended),0.23,1.13,https://www.lcsc.com/search?q=C53434
+10,"Q1, Q2",onsemi BSS138 N-Channel 50V 0.22A SOT-23 MOSFETs,8,JLCPCB SMT (Extended),0.07,0.56,https://www.lcsc.com/search?q=C52895
+11,L1,MetalLions MSRH74-100MT 10uH Shielded Power Inductor 7.3x7.3mm,3,JLCPCB SMT (Extended),0.18,0.55,https://www.lcsc.com/search?q=C915310
+12,U4,Silergy SY8089A1AAC 2A Synchronous Step-Down Buck Converter,6,JLCPCB SMT (Extended),0.09,0.52,https://www.lcsc.com/search?q=C479074
+13,L2,Littelfuse / Bourne SMAJ18CA Bidirectional TVS Diode,6,JLCPCB SMT (Extended),0.06,0.37,https://www.lcsc.com/search?q=C514088
+14,C1,Honor Elec RVT1C471M0810 470uF 16V SMD Electrolytic Cap 8x10.5mm,5,JLCPCB SMT (Extended),0.07,0.33,https://www.lcsc.com/search?q=C3341
+15,C2,Honor Elec RVT1E101M0607 100uF 25V SMD Electrolytic Cap 6.3x7.7mm,5,JLCPCB SMT (Extended),0.04,0.18,https://www.lcsc.com/search?q=C3338
+16,"R4, R5",Yageo 470k 1% 1206 High-Voltage Potential Divider Resistors,15,JLCPCB SMT (Extended),0.01,0.11,https://www.lcsc.com/search?q=C17997
+17,R2,Uniroyal 200 ohm 1% 0805 Current Sense Resistor,20,JLCPCB SMT (Basic),0.01,0.14,https://www.lcsc.com/search?q=C17540
+18,R12,Uniroyal 56.2k ohm 1% 0603 Precision Resistor,20,JLCPCB SMT (Extended),0.002,0.04,https://www.lcsc.com/search?q=C23080
+19,Passives Array,"Decoupling Caps, Resistors, Schottky D1, Status LEDs",~200,JLCPCB SMT (Basic),0.02,4.43,https://jlcpcb.com/parts
+20,JLCPCB Setup,"SMT Stencil, Base Engineering, and 18 Extended Feeder Fees",1,JLCPCB Manufacturing,93.74,93.74,https://jlcpcb.com/smt-assembly
+21,Bare PCBs,5x 2-Layer 113.4x69.2mm FR-4 1.6mm OSP Finish Boards,5,JLCPCB Fabrication,11.96,59.82,https://jlcpcb.com
+22,Shipping,JLCPCB Express Courier Delivery (0.79 kg),1,JLCPCB Logistics,38.66,38.66,https://jlcpcb.com
+23,U1,Hi-Link HLK-10M05 10W (5V 2A) Isolated AC-DC SMPS Module,2,Hand-Soldered THT,4.50,9.00,https://www.hlktech.net/index.php?id=805
+24,TR1,Zeming ZMPT101K Precision 2mA:2mA 4kV Potential Transformer,2,Hand-Soldered THT,1.50,3.00,https://www.lcsc.com/search?q=ZMPT101K
+25,RV1,10D471K Metal Oxide Varistor (MOV 275V AC RMS Surge Clamping),2,Hand-Soldered THT,0.40,0.80,https://www.lcsc.com/search?q=10D471K
+26,F1,5x20mm PCB Clip + 1A Slow-Blow AC Mains Safety Fuse,2,Hand-Soldered THT,0.60,1.20,https://www.mouser.com/c/circuit-protection/fuses/cartridge-fuses/?series=5x20mm
+27,J1,JST-PH 2.0mm 2-Pin Battery Receptacle Male Right-Angle,2,Hand-Soldered THT,0.50,1.00,https://www.lcsc.com/search?q=C131337
+28,Tool,FNIRSI DSO153 Pocket Mini-Oscilloscope & Signal Generator,1,Diagnostic Tool,65.30,65.30,https://www.takealot.com/fnirsi-dso153-mini-oscilloscope-signal-generator-with-oscillosc/PLID95593848
+29,Battery,1S 3.7V 2000mAh Li-ion Battery Pack with JST-PH Connector,1,Self-Owned ($0.00),0.00,0.00,https://www.adafruit.com/product/2011 (Reusing bench battery)
+30,Enclosure,Custom Snap-Fit Wall-Mount Case (PLA 3D Printed Locally),1,Self-Fabricated ($0.00),0.00,0.00,https://github.com/kylerichter36-coder/GridWatcher (Printing locally)
+31,Programmer,4-Pin Gold Pogo-Pin USB-Serial-JTAG Programming Fixture,1,Self-Built ($0.00),0.00,0.00,https://github.com/kylerichter36-coder/GridWatcher (Built from scrap)
+32,Hand Tools,"Soldering Station, Lead-Free Solder, Flux, Cutters, Multimeter",1,Self-Owned ($0.00),0.00,0.00,https://www.pine64.org/pinecil/ (Workbench tools)
