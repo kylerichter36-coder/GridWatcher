@@ -22,6 +22,23 @@ I built GridWatcher to measure these exact micro-fluctuations and predict outage
 
 ---
 
+## How to Use GridWatcher
+
+GridWatcher is designed to be an autonomous, set-and-forget wall monitor:
+
+1. **Installation & AC Hookup:**  
+   Plug the device directly into an AC wall socket (100–240V AC, 50/60Hz) or wire it into your home electrical distribution board. Input power is protected by an on-board 1A slow-blow fuse and 10D471K MOV surge clamp.
+2. **Autonomous Startup & 4G Link:**  
+   On boot, the isolated Hi-Link 5V power supply turns on the board and starts charging the backup LiPo battery via the BQ24074 PMIC. The SIMCom A7670E modem connects to the local cellular tower over LTE Cat-1. It requires zero Wi-Fi pairing or local router dependencies, so it stays online even when home routers die during grid failures.
+3. **Real-Time Monitoring:**  
+   The BL0939 IC continuously measures line voltage, current, and frequency. The ESP32-S3 runs the deterministic state classifier and feeds rolling feature buffers into the Random Forest prediction engine.
+4. **Early-Warning Outage Prediction:**  
+   If the ML engine detects voltage sag slopes or frequency decay jitter indicating grid failure within the upcoming 20–60 seconds, it sends an immediate SMS alert and MQTT warning to your phone so you can save work and protect equipment before the blackout hits.
+5. **Blackout Ride-Through & Black-Box Logging:**  
+   When mains power drops, the battery circuit takes over with zero drop-out. The device freezes the preceding 60 seconds of high-speed electrical waveform data to the 1GB SD-NAND flash chip for post-incident diagnostics.
+
+---
+
 ## 3D CAD Assembly & Physical Design
 
 GridWatcher is designed as a monolithic 2-layer integrated PCBA (113.40 x 69.22 mm) that mounts cleanly inside a 3D-printed snap-fit wall enclosure. Zero loose devboards, zero breadboard jumper wires, and zero external USB ports that collect dust.
@@ -101,6 +118,26 @@ The PCB was designed and routed in KiCad as a 2-layer FR-4 board measuring **113
 * **RF Keep-Out Zone:** An etched copper trace antenna sits on the top edge with zero copper planes underneath (hatched keep-out area) to maintain 50Ω impedance matching.
 * **Transient GSM Decoupling:** A 470µF low-ESR tantalum capacitor (`C19`) sits directly beside the A7670E VBAT pins to supply 2.0A transmission burst pulses without triggering undervoltage lockouts.
 * **High-Frequency Bypass Placement:** 100nF ceramic decoupling caps sit directly adjacent to ESP32 VDD pins and SD-NAND VCC pins, tied into the bottom ground plane with dedicated vias.
+
+---
+
+## Subsystem Pinout & Interconnect Mapping
+
+| ESP32-S3 Pin | Signal Net | Connected Peripheral | Function |
+| :--- | :--- | :--- | :--- |
+| **GPIO19 (U0RXD)** | `/RX 939` | Shanghai Belling BL0939 TX | Reads true RMS voltage, current, and line frequency |
+| **GPIO20 (U0TXD)** | `/TX 939` | Shanghai Belling BL0939 RX | Configures calibration registers and measurement modes |
+| **GPIO15** | `/esp32 gpio` | BL0939 CF1 Output | High-speed electrical pulse / energy interrupt |
+| **GPIO10** | `/MODEM_TX_3V3` | TI TXS0102 Port A1 | Level-shifted UART TX to SIMCom A7670E (1.8V domain) |
+| **GPIO11** | `/MODEM_RX_3V3` | TI TXS0102 Port A8 | Level-shifted UART RX from SIMCom A7670E (1.8V domain) |
+| **GPIO9** | `/ESP_PWRKEY` | onsemi BSS138 Q1 Gate | Active-low modem power key pulse control |
+| **GPIO8** | `/ESP_RESET` | onsemi BSS138 Q2 Gate | Active-low modem hardware reset control |
+| **GPIO11, 12, 13, 14** | `/IO11`..`/IO14` | XTX 1GB SD-NAND LGA-8 | 1-bit SDMMC bus (CMD, CLK via 22Ω R22, DAT0, CS) |
+| **GPIO6 (SDA)** | `/ESP SDA` | Maxim MAX17048 SDA | I2C battery fuel gauge data (pulled up to 3.3V) |
+| **GPIO7 (SCL)** | `/ESP SCL` | Maxim MAX17048 SCL | I2C battery fuel gauge clock (pulled up to 3.3V) |
+| **GPIO4** | `/ESP GPIO CHG` | TI BQ24074 CHG Pin | Open-drain battery charging status monitoring |
+| **GPIO5** | `/ESP GPIO-` | Status LED Indicator | Visual operational state / warning blinker |
+| **USB D+ / D-** | `USB_D+` / `USB_D-` | Flush Pogo Test Pads | Native ESP32-S3 ROM bootloader programming jig |
 
 ---
 
