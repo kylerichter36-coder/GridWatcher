@@ -14,3 +14,13 @@ build/
 scratch/
 .system_generated/
 __pycache__/
+
+# KiCad and editor locks / backups
+*.lck
+~*
+*.bak
+*-backups/
+.history/
+**/monitoring v0.2/.history/
+test_udp.py
+
