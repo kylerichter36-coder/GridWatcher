@@ -1,185 +1,155 @@
 # GridWatcher
 
-![Status](https://img.shields.io/badge/status-V1%20Functional%20Prototype-brightgreen)
-![Hardware](https://img.shields.io/badge/hardware-ESP32--C6%20%7C%20SX1262%20LoRa-blue)
+![Status](https://img.shields.io/badge/status-v0.2%20Prototype%20%2F%20v0.3%20Integrated%20PCBA-brightgreen)
+![Hardware](https://img.shields.io/badge/hardware-ESP32--S3%20%7C%20A7670E%20LTE%20%7C%20BL0939-blue)
 ![ML](https://img.shields.io/badge/ML-Scikit--Learn%20Random%20Forest-orange)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-> **A ~R1,500 dual-device LoRa sensor + Raspberry Pi-class server system that predicts power outages before they happen, texts your phone, and retrains its own ML model automatically.**
+> Real-time electrical grid telemetry and anomaly detection system designed to measure AC line fluctuations, predict local power interruptions, and transmit alerts over cellular and LoRa networks.
 
 ---
 
-## Why I Built This
-Living with an unreliable local power grid meant sudden blackouts, lost work, and voltage sags damaging household electronics. Commercial utility monitors are either expensive proprietary hardware or reactive meters that only alert *after* the power is already out. GridWatcher was built to provide localized, real-time AC voltage and frequency telemetry with early-warning machine learning risk predictions and instant SMS notifications.
+## System Overview & Objectives
+South Africa's electrical distribution grid experiences chronic load shedding, feeder trips, and voltage sags that disrupt electronics and industrial loads. Most commercial monitors are purely reactive meters that report power failure after utility service has already collapsed. GridWatcher samples AC line parameters continuously to classify grid states, log micro-fluctuations, and detect decay patterns prior to total interruption.
+
+The project encompasses two hardware revisions:
+* **Hardware v0.2:** Modular benchtop prototype built with an ESP32-C6 carrier board, SX1262 LoRa link, analog ZMPT101B module, and a handheld ST7789 TFT receiver.
+* **Hardware v0.3 ("GriDwatcher china"):** Monolithic 2-layer SMT printed circuit board assembly integrating discrete compute, 4G LTE Cat-1 cellular telemetry, dual-channel energy metering, dynamic power-path battery management, and 1GB SD-NAND flash storage.
 
 ---
 
-## System Architecture & Data Flow
+## Hardware Revision Architecture
 
-```mermaid
-graph LR
-    subgraph Edge Hardware
-        ZMPT[ZMPT101B AC Sensor] -->|ADC / GPIO2| ESP32[ESP32-C6 Base Station]
-        ESP32 -->|Layer 1 C++ Rules| L1[Instant State: Normal/Sag/Surge/Blackout]
-        ESP32 -->|Layer 2 C++ ML Engine| L2[Predictive Risk Score 0-100%]
-    end
+```
+Hardware v0.2 (Modular Prototype)
+[AC Line] --> [ZMPT101B ADC] ---------> [ESP32-C6] ---> [SX1262 LoRa] ---> [Handheld / Server]
+[Mains 5V] -> [MT3608 Boost / TP4056] -> [1S LiPo]
 
-    subgraph Long-Range Telemetry
-        ESP32 -->|12-Byte LoRa Packet| Handheld[ESP32-C6 Handheld Dashboard]
-        ESP32 -->|12-Byte LoRa Packet| Pi[Orange Pi / Armbian Server]
-    end
-
-    subgraph Home Automation & ML Pipeline
-        Pi -->|MQTT| HA[Home Assistant Dashboard]
-        Pi -->|CSV Logger| Trainer[Windows Retraining GUI]
-        Trainer -->|Train Random Forest| Header[Export C++ grid_model.h]
-        Trainer -->|Auto-OTA Binaries| ESP32
-        Pi -->|Termux ADB Bridge| SMS[Instant SMS Alerts]
-    end
+Hardware v0.3 (Monolithic SMT PCBA)
+[Mains 230V] --> [HLK-10M05 5V] ------> [BQ24074 PMIC] ---> [SY8089 3.3V] ---> [ESP32-S3 Core]
+[Mains 230V] --> [BL0939 Dual Meter] -> [UART 3.3V] ----------> [ESP32-S3 Core]
+[1S LiPo] -----> [MAX17048 Fuel Gauge] -> [I2C] -------------> [ESP32-S3 Core]
+[ESP32-S3 Core] --> [1-bit SDMMC] ----> [XTX 1GB SD-NAND]
+[ESP32-S3 Core] --> [TXS0102 Level Shift] -> [A7670E 4G LTE] -> [On-PCB RF Antenna]
 ```
 
----
+### Architectural Comparison: v0.2 vs. v0.3
 
-## System Categorization
-
-### Implemented in V1
-* **True RMS AC Sampling**: ZMPT101B RMS voltage sampling and zero-crossing frequency detection on GPIO 2.
-* **Layer 1 State Machine**: Real-time deterministic C++ grid state classification (`BLACKOUT`, `SURGE`, `BROWNOUT_SAG`, `FREQ_JITTER`, `NORMAL`).
-* **12-Byte Binary LoRa Protocol**: Compact binary packet structure (`GridPacket`) with magic header verification (`0x4757`).
-* **Handheld TFT Dashboard**: ESP32-C6 handheld receiver with ST7789 240x135 display rendering live electrical, battery, and signal status.
-* **Android Termux Gateway & SMS Bridge**: Refurbished Android phone running Termux/ADB to log cellular tower telemetry, host live status web endpoints, and dispatch instant SMS outage alerts via `termux-sms-send`.
-* **Home Assistant Integration**: Real-time MQTT telemetry reporting and Lovelace dashboard integration.
-* **1-Click Windows Setup**: Standalone `install_startup.bat` script that configures `arduino-cli`, ESP32 cores, and required libraries.
-
-### Experimental Features (V1)
-* **Layer 2 ML Risk Engine**: Random Forest ensemble (`grid_model.h`) evaluating 8 model inputs to compute continuous 0–30s pre-outage risk scores.
-* **Pure Timestamp Feature Extraction**: Pure timestamp-based search (`timestamp_ms`) computing 10s and 30s rolling rates of change and variance.
-* **Dual-Stage Wireless Auto-OTA**: Wi-Fi self-flashing engine checking local server (`192.168.3.47:5000`) with direct GitHub HTTPS fallback.
-
-### Planned for V2 (Future Revision)
-* **Custom Integrated PCB**: Monolithic PCB design replacing devboards and point-to-point wiring.
-* **Precision AC Front-End**: Dedicated high-voltage metering IC with factory calibration against laboratory reference meters.
-* **Feature Importance & Model Interpretability**: Extract and log Gini feature importance (and SHAP values) from the trained Random Forest to confirm whether `cell_signal` contributes meaningfully or is redundant relative to AC-derived features.
-* **Cryptographic Packet Security**: Hardware-accelerated AES-128 payload encryption and packet signing.
-* **Dedicated Hardware Watchdog**: External timer IC for emergency hardware reset during power dips.
+| Subsystem | Hardware v0.2 (Prototype) | Hardware v0.3 ("GriDwatcher china") |
+| :--- | :--- | :--- |
+| **Compute Core** | DFRobot ESP32-C6 breakout board | ESP32-S3-WROOM-1-N16R8 (16MB Flash, 8MB Octal PSRAM) |
+| **Energy Metering** | ZMPT101B analog transformer + MCU ADC | Belling BL0939 dual-channel energy IC (true RMS, frequency, PF) via UART |
+| **Primary Telemetry** | Semtech SX1262 LoRa transceiver (868 MHz) | SIMCom A7670E-LASE 4G LTE Cat-1 cellular modem + Nano-SIM socket |
+| **RF Interface** | External SMA whip antenna pigtail | Monolithic etched copper trace antenna + PI-matching filter |
+| **Power Supply** | External Hi-Link module + discrete MT3608 boost | Hi-Link HLK-10M05 10W isolated SMPS + CLC PI-filter (470uF/10uH/100uF) |
+| **Battery Management** | Standalone TP4056 linear charging board | TI BQ24074 dynamic power-path manager (1.0A charge, 1.55A input limit) |
+| **System Step-Down** | Linear LDO on MCU breakout | Silergy SY8089A1AAC 2A synchronous buck regulator (1.5MHz, 95% efficiency) |
+| **Fuel Gauge** | Raw ADC voltage divider | Maxim MAX17048 I2C fuel gauge (1% SoC resolution, alert interrupt) |
+| **Local Storage** | Microcontroller internal flash only | XTX XTSDG08GWSIGA 1GB industrial SD-NAND (LGA-8) via SDMMC bus |
+| **Host Programming** | Exposed USB-C connector on breakout | 4-pad flush gold Pogo-pin jig (VBUS, GND, D+, D-) with SS14 isolation diode |
+| **Construction** | Perfboard, pin headers, flying leads | Monolithic 113.40 x 69.22 mm 2-layer SMT PCBA (JLCPCB assembly) |
 
 ---
 
-<details>
-<summary><b>Click to expand Deep Technical Specifications & Architecture</b></summary>
+## Subsystem Details
 
-### Repository Structure
+### 1. Hardware v0.3 PCBA (Manufacturing Ready)
+Production files, schematics, and mechanical models are maintained in `Hardware/GridWatcher_v0.3/`:
+* **Mains Input & Power Conversion:** AC input protected by a 1A slow-blow fuse and 10D471K metal-oxide varistor. Step-down conversion handled by a Hi-Link HLK-10M05 10W isolated SMPS feeding a CLC PI-filter to attenuate 5V ripple before the battery charger.
+* **Power-Path PMIC & Buck Regulator:** Texas Instruments BQ24074 powers system rails directly from input power while managing single-cell Li-ion charging. If input power collapses, the PMIC switches the `VSYS` rail to battery power with zero drop-out. A Silergy SY8089 buck converter steps `VSYS` down to 3.3V for digital logic.
+* **Energy Front-End:** Shanghai Belling BL0939 dual-channel energy measurement IC interfaces to mains voltage through a ZMPT101K potential transformer and dual 412k 0.1% 1206 resistor divider. Computes true RMS voltage, current, active power, and line frequency on hardware registers, read by the ESP32-S3 over UART.
+* **4G LTE Cellular Subsystem:** SIMCom A7670E Cat-1 module wired to a hinged Nano-SIM socket (`J2`). Baseband 1.8V UART lines translate to 3.3V logic through a TI TXS0102 bidirectional level shifter. A 470uF low-ESR tantalum reservoir capacitor (`C19`) suppresses voltage drop during 2A cellular transmit bursts. ESP32 GPIOs control power and reset through discrete BSS138 N-channel MOSFETs.
+* **Continuous Event Storage:** 1GB SD-NAND (`XTSDG08GWSIGA`, LGA-8) on an SDMMC bus stores high-resolution electrical waveforms and diagnostic logs directly on solid-state media.
+* **Programming Interface:** Eliminates external USB receptacles. 4 gold test pads mate with an external pogo-pin programming fixture. An on-board SS14 Schottky diode prevents 5V back-feeding into host programming ports during live AC testing.
+
+### 2. Hardware v0.2 Prototype
+The functional prototype validates firmware logic, telemetry schemas, and predictive algorithms:
+* **Edge Transmitter:** ESP32-C6 reading ZMPT101B analog waveform data, executing Layer 1 deterministic rules, and packing telemetry into binary packets.
+* **Telemetry Protocol:** 12-byte packed binary format (`GridPacket`) with sync magic `0x4757`, achieving a 2.8x reduction over ASCII payloads.
+* **Handheld Receiver:** ESP32-C6 dashboard paired with an ST7789 240x135 SPI TFT display showing voltage, frequency, battery percentage, and signal metrics.
+* **Server Gateway:** Orange Pi / Armbian server logging telemetry datasets to CSV, publishing metrics to MQTT (Home Assistant), and driving SMS notifications via Android Termux ADB bridge.
+
+---
+
+## Software & Machine Learning Pipeline
+
+```
+[Mains Voltage / Frequency]
+        |
+        v
+[Layer 1: Deterministic State Machine]
+  - Normal (210V <= V <= 250V, 49.5Hz <= F <= 50.5Hz)
+  - Brownout Sag (180V <= V < 210V)
+  - Voltage Surge (V > 250V)
+  - Frequency Jitter (F < 49.5Hz or F > 50.5Hz)
+  - Blackout (V < 180V or F < 45.0Hz)
+        |
+        v
+[Layer 2: Random Forest Anomaly Classifier]
+  - Inputs: V, F, dV/dt (10s), dF/dt (10s), V_std (30s), F_std (30s), V_slope (30s), RSRP
+  - Model: 3 decision trees (max_depth=4) compiled to C++ in grid_model.h
+  - Output: 0-100% pre-outage risk index over a 0-30 second forward horizon
+```
+
+### Feature Mechanics & Preprocessing
+* `voltage`: Instantaneous RMS line voltage.
+* `frequency`: Instantaneous AC line frequency derived from zero-crossing intervals.
+* `dV_dt_10s`: 10-second first-order difference in voltage ($V/s$).
+* `dF_dt_10s`: 10-second first-order difference in line frequency ($Hz/s$).
+* `v_std_30s`: Standard deviation of voltage over a 30-second rolling window.
+* `f_std_30s`: Standard deviation of frequency over a 30-second rolling window.
+* `v_slope_30s`: Linear regression slope of voltage over a 30-second window.
+* `cell_signal`: Cellular tower RSRP (dBm), serving as an auxiliary indicator of regional feeder distress during wide-area power degradation.
+
+The Python trainer (`windows_trainer/gridwatcher_ml_gui.py`) validates timestamp intervals, rejects sample windows spanning data gaps ($\Delta t > 35\text{s}$), performs an 80/20 chronological holdout split, and exports decision trees directly to native C++ functions.
+
+---
+
+## Repository Structure
 
 ```
 GridWatcher/
-├── home_sender/              # ESP32-C6 Base Station transmitter firmware
-│   ├── home_sender.ino       # ZMPT101B RMS sampling, Layer 1 status, 12-byte LoRa TX
-│   └── grid_model.h          # Exported C++ Random Forest decision tree model
-├── gridwatcher_dashboard2/   # ESP32 Handheld receiver & TFT dashboard firmware
-│   └── gridwatcher_dashboard2.ino
-├── windows_trainer/          # Automated Windows training pipeline & GUI
-│   ├── gridwatcher_ml_gui.py # PyQt GUI, gap-aware feature extractor, C++ exporter
-│   └── install_startup.bat   # 1-click dependency installer (arduino-cli standalone)
-├── WORKING_ON/               # Active development status & phase documentation
-│   └── README.md
-└── version.json              # Current firmware & ML model version manifest
+├── Hardware/
+│   ├── GridWatcher_v0.3/             # Monolithic SMT PCBA design
+│   │   ├── GriDwatcher china.kicad_pcb  # KiCad PCB layout (113.4 x 69.2 mm)
+│   │   ├── GriDwatcher china.kicad_sch  # 10-block functional schematic
+│   │   ├── GriDwatcher_china_gerbers.zip# Production RS-274X Gerbers and drill files
+│   │   ├── GriDwatcher_china_v0.3.step  # Full board 3D mechanical assembly
+│   │   ├── jlcpcb_bom.csv            # SMT pick-and-place Bill of Materials
+│   │   ├── jlcpcb_bom_complete.csv   # Complete BOM including hand-assembled THT
+│   │   ├── jlcpcb_cpl.csv            # Centroid placement file with feeder rotation offsets
+│   │   └── README.md                 # v0.3 technical specs, pin mapping, and parts errata
+│   └── monitoring v0.2/              # Legacy v0.2 carrier board schematics and Gerbers
+├── home_sender/                      # ESP32 base station firmware
+│   ├── home_sender.ino               # AC sampling, Layer 1 classification, LoRa/cellular TX
+│   ├── grid_model.h                  # Compiled Random Forest decision tree model
+│   └── secrets.h.example             # Network credential configuration template
+├── gridwatcher_dashboard2/           # Handheld receiver firmware (ESP32-C6 + ST7789 TFT)
+├── phone_server/                     # Cellular and SMS gateway scripts (Termux / ADB)
+├── windows_trainer/                  # Training pipeline, PyQt GUI, and firmware flash tool
+│   ├── gridwatcher_ml_gui.py         # Rolling feature extraction, tree training, C++ exporter
+│   └── install_startup.bat           # Environment bootstrapper for arduino-cli and toolchains
+├── JOURNAL.md                        # Engineering build journal and hardware progression log
+├── version.json                      # Firmware and model tracking manifest
+└── README.md
 ```
-
-### Prototype Bill of Materials & Cost Breakdown (ZAR)
-
-| Unit | Key Components | Prototype Cost (incl 15% VAT) |
-|---|---|:---:|
-| **Handheld Receiver Dashboard** | ESP32-C6, SX1262 LoRa, ST7789 TFT Display, 2000mAh LiPo, 868MHz High-Gain Antenna, Protoboard | **R736** |
-| **Base Station Sender** | ESP32-C6, SX1262 LoRa, ZMPT101B AC Sensor, Hi-Link 5V Power, Boost Regulator, 868MHz High-Gain Antenna, LiPo Backup | **R843** |
-| **Central Home Server & Gateway** | Armbian/Orange Pi Server + Refurbished Android Phone (Termux) | Reused / R0 |
-| **Total Combined Prototype Build** | Both complete units including antennas, cabling, and hardware | **~R1,580** |
-
-### Core Technical Design
-
-#### Design Philosophy
-GridWatcher combines direct AC power delivery measurements with auxiliary environmental side-channel indicators to predict electrical grid instability.
-
-#### 1. Dual-Layer Classification Architecture
-
-* **Layer 1: Deterministic C++ State Machine (`home_sender.ino`)**
-  Evaluates instantaneous voltage and frequency using strict severity precedence:
-  1. **Blackout**: `V < 180.0V` or `F < 45.00Hz`
-  2. **Voltage Surge**: `V > 250.0V`
-  3. **Brownout Sag**: `180.0V <= V < 210.0V`
-  4. **Frequency Jitter**: `210.0V <= V <= 250.0V` and (`F < 49.50Hz` or `F > 50.50Hz`)
-  5. **Normal**: `210.0V <= V <= 250.0V` and `49.50Hz <= F <= 50.50Hz`
-
-* **Layer 2: Experimental Time-Series ML Risk Model (`grid_model.h`)**
-  Evaluates **8 total inputs** to compute continuous 0–30s pre-outage risk scores:
-
-  ##### Feature Rationale & Engineering Hypotheses
-
-  | Feature | Category | Rationale & Mechanics |
-  |---|---|---|
-  | `voltage` | Direct AC | Instantaneous RMS AC voltage (V); physically tracks supply level. |
-  | `frequency` | Direct AC | Instantaneous line frequency (Hz); reflects utility generation/load balance. |
-  | `dV_dt_10s` | Direct AC | 10-second voltage rate of change ($\text{V}/\text{s}$); detects rapid dips or surges. |
-  | `dF_dt_10s` | Direct AC | 10-second frequency rate of change ($\text{Hz}/\text{s}$); catches sudden frequency decay. |
-  | `v_std_30s` | Direct AC | 30-second voltage standard deviation; quantifies short-term AC amplitude instability. |
-  | `f_std_30s` | Direct AC | 30-second frequency standard deviation; measures line frequency turbulence. |
-  | `v_slope_30s` | Direct AC | 30-second linear regression voltage slope ($\text{V}/\text{s}$); captures multi-second voltage trend directional drift. |
-  | `cell_signal` | Environmental | Cellular network tower signal strength (RSRP in dBm, clamped to -120 to 0 dBm). |
-
-  * **Cellular RSRP Feature Rationale**:
-    > **Engineering Hypothesis**: Cell towers sharing the regional utility feeder may show supply degradation or backup-power failover during severe grid stress, providing a secondary spatial/regional indicator alongside direct AC metrics. Expected to be a lagging signal (tower backup typically buffers 4–8 hours) rather than instantaneous, unlike the AC-derived features.
-
-  Outputs an experimental risk score from 0.0% to 100.0% using an ensemble of 3 Random Forest decision trees (`max_depth=4`) exported directly into native C++ functions (`tree0()`, `tree1()`, `tree2()`).
-
-#### 2. 12-Byte Binary LoRa Telemetry Protocol
-
-Telemetry is packed into a 12-byte binary structure (`GridPacket`), providing an **approximately 2.8x reduction in payload data size** compared to the legacy 34-byte ASCII string payload ($34 / 12 \approx 2.83\times$):
-
-```cpp
-struct __attribute__((packed)) GridPacket {
-    uint16_t magic = 0x4757;  // 2 Bytes: 'GW' Sync Header
-    int16_t  voltage_x10;     // 2 Bytes: Scaled Voltage (e.g. 2301 = 230.1V)
-    uint16_t freq_x100;       // 2 Bytes: Scaled Frequency (e.g. 5000 = 50.00Hz)
-    uint8_t  status;          // 1 Byte: GridStatus Enum (0..4)
-    uint8_t  risk_score;      // 1 Byte: Experimental Risk % (0..100)
-    uint8_t  ml_version;      // 1 Byte: Model Version (ML_MODEL_VERSION)
-    int8_t   rssi;            // 1 Byte: Cellular Tower Signal Strength RSRP (-120..0 dBm)
-    uint8_t  base_battery;    // 1 Byte: Base Station Battery % (0..100)
-    int8_t   phone_battery;   // 1 Byte: Phone Hotspot Battery % (-1 or 0..100)
-};
-// Total Size: 12 Bytes
-```
-
-Both Handheld and Server receivers validate `packet.magic == 0x4757` to verify packet structure and reject malformed or unrelated RF data.
-
-### Machine Learning Pipeline & Training
-
-1. Telemetry datasets are logged automatically by the Orange Pi server (~10s log interval).
-2. `gridwatcher_ml_gui.py` loads `telemetry.csv` and computes rolling features with timestamp gap invalidation ($\Delta t > 35.0\text{s}$).
-3. Samples are labeled with a continuous 0–30s forward-looking horizon (`target_risk = 1` if an anomaly occurs within the upcoming 30 seconds while current state is Normal).
-4. Scikit-Learn performs a **chronological 80/20 train/test holdout split** on historical telemetry, fitting a 3-tree Random Forest classifier (**86.48% training accuracy / 82.75% test holdout accuracy** for live model **v31**) and exporting decision rules into `home_sender/grid_model.h`. *Note: Accuracy is an experimental metric evaluated on historical local dataset logs and does not serve as a guarantee of real-world outage prediction capability.*
-5. The Base Station firmware is compiled using `arduino-cli` and updated wirelessly via local HTTP OTA or direct GitHub HTTPS fallback.
-
-### Current Prototype Limitations
-
-1. **Prototype Hardware Measurement**: The ZMPT101B analog sensing module and ESP32 ADC chain are prototype-grade components and have not been calibrated against laboratory-grade reference meters.
-2. **Experimental ML Validation**: The machine learning model is trained on telemetry from a single installation site. Real-world outage prediction accuracy requires extensive multi-site dataset validation across diverse grid topologies.
-3. **OTA Network Scope & Security**: While local network OTA endpoints (`/update`, `/trigger-ota`) operate unauthenticated within a trusted LAN boundary, the direct GitHub fallback path fetches firmware binaries over the public internet using `setInsecure()` TLS without certificate pin verification.
-4. **Known Limitations of the Cellular RSRP Feature**:
-   * **Single-Tower Dependency**: Telemetry currently observes a single cell tower's backup behavior rather than a true regional signal until multiple gateway locations are logging.
-   * **Site & Carrier Variation**: Tower backup behavior varies significantly by carrier and site (battery-only vs. generator-backed), causing RSRP proxy reliability to be inconsistent across network sectors.
-   * **Feature Importance Unvalidated**: RSRP has not yet been quantitatively validated against Gini/SHAP feature importance metrics to confirm whether the trained model actively relies on this feature during real anomaly events vs. riding along with AC voltage features.
-
-</details>
 
 ---
 
-## Local Setup & Installation
+## Build and Setup Instructions
 
-Sensitive credentials are excluded from source control via `.gitignore`:
-* **Wi-Fi Credentials**: Loaded via `home_sender/secrets.h` (`#if __has_include("secrets.h")`) or hardware NVS storage.
-* **AP & OTA Passwords**: Defined as configurable macros (`#ifndef AP_PASSWORD`, `#ifndef OTA_PASSWORD`) overridable via `secrets.h`.
-* **Server Credentials**: `gridwatcher_ml_gui.py` checks environment variable `GRIDWATCHER_PI_PASS` or local `secrets.json` before falling back to dev defaults.
+### Hardware Manufacturing (v0.3)
+1. Download `Hardware/GridWatcher_v0.3/GriDwatcher_china_gerbers.zip`.
+2. Upload to JLCPCB (2-layer FR-4, 1.6mm thickness, 1oz copper, green solder mask, white silkscreen).
+3. Select SMT assembly (top side only), supplying `jlcpcb_bom.csv` and `jlcpcb_cpl.csv`.
+4. Hand-assemble remaining through-hole components post-fabrication: Hi-Link HLK-10M05 (`U1`), ZMPT101K transformer (`TR1`), 10D471K varistor (`RV1`), 5x20mm fuse clips (`F1`), and 2-pin JST-PH battery header (`J1`).
 
-To set up a new machine:
-1. Run `windows_trainer/install_startup.bat` to install `arduino-cli`, the ESP32 board core, required libraries (`RadioLib`, `Adafruit GFX`, `ST7789`, `BusIO`), and Python dependencies.
-2. Launch `windows_trainer/gridwatcher_ml_gui.py` to run retraining and automated OTA deployment.
+### Toolchain & Firmware Setup
+1. Run `windows_trainer/install_startup.bat` to set up `arduino-cli`, the ESP32 platform core, and required libraries (`RadioLib`, `Adafruit-GFX-Library`, `Adafruit_ST7789`, `Adafruit_BusIO`).
+2. Configure Wi-Fi or cellular APN credentials in `home_sender/secrets.h`.
+3. Compile and flash the target firmware:
+   ```bash
+   arduino-cli compile --fqbn esp32:esp32:esp32s3 home_sender
+   arduino-cli upload -p <PORT> --fqbn esp32:esp32:esp32s3 home_sender
+   ```
+4. Run `python windows_trainer/gridwatcher_ml_gui.py` to retrain decision trees from newly collected CSV telemetry.
