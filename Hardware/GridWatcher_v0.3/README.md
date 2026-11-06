@@ -1,4 +1,4 @@
-# GridWatcher Hardware v0.3 ("GriDwatcher china")
+# GridWatcher Hardware v0.3
 
 Monolithic 2-layer integrated telemetry and energy monitoring board designed for JLCPCB SMT assembly, replacing the modular v0.2 breakout carrier board.
 

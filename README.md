@@ -1,4 +1,4 @@
-# GridWatcher (v0.3 / "GriDwatcher china")
+# GridWatcher v0.3
 
 > An edge electrical grid telemetry device that monitors AC line fluctuations and predicts power outages 20 to 60 seconds before they happen, sending alerts over 4G LTE cellular. Built for **Hack Club Fallen** (Maker Faire Shenzhen, Dec 2026).
 

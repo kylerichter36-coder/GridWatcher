@@ -1,7 +1,7 @@
 /*
  * GridWatcher Hardware v0.3 - Firmware Architecture & Driver Skeleton
  * Target: ESP32-S3-WROOM-1-N16R8 (16MB Flash, 8MB PSRAM)
- * Board: GriDwatcher china (v0.3 Monolithic PCBA)
+ * Board: GridWatcher v0.3 (Monolithic PCBA)
  * Author: Kyle Mason Richter (@fuelled / kylerichter36-coder)
  * Target Event: Hack Club Fallen - Maker Faire Shenzhen (Dec 2026)
  *

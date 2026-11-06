@@ -1,5 +1,5 @@
 # GridWatcher: Engineering Build Journal
-**Project:** GridWatcher (Hardware v0.3 / "GriDwatcher china")  
+**Project:** GridWatcher Hardware v0.3  
 **Author:** Kyle Mason Richter (`@fuelled` / `kylerichter36-coder`)  
 **Target:** Hack Club Fallen: Maker Faire Shenzhen (Dec 11–14, 2026)  
 **Hardware Repository:** `https://github.com/kylerichter36-coder/GridWatcher.git`
