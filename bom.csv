@@ -20,14 +20,17 @@ Item,Designator,Description,Qty,Category / Sourcing,Unit Price (USD),Total (USD)
 19,Passives Array,"Decoupling Caps, Resistors, Schottky D1, Status LEDs",~200,JLCPCB SMT (Basic),0.02,4.43,https://jlcpcb.com/parts
 20,JLCPCB Setup,"SMT Stencil, Base Engineering, and 18 Extended Feeder Fees",1,JLCPCB Manufacturing,93.74,93.74,https://jlcpcb.com/smt-assembly
 21,Bare PCBs,5x 2-Layer 113.4x69.2mm FR-4 1.6mm OSP Finish Boards,5,JLCPCB Fabrication,11.96,59.82,https://jlcpcb.com
-22,Shipping,JLCPCB Express Courier Delivery (0.79 kg),1,JLCPCB Logistics,38.66,38.66,https://jlcpcb.com
-23,U1,Hi-Link HLK-10M05 10W (5V 2A) Isolated AC-DC SMPS Module,2,Hand-Soldered THT,4.50,9.00,https://www.hlktech.net/index.php?id=805
-24,TR1,Zeming ZMPT101K Precision 2mA:2mA 4kV Potential Transformer,2,Hand-Soldered THT,1.50,3.00,https://www.lcsc.com/search?q=ZMPT101K
-25,RV1,10D471K Metal Oxide Varistor (MOV 275V AC RMS Surge Clamping),2,Hand-Soldered THT,0.40,0.80,https://www.lcsc.com/search?q=10D471K
-26,F1,5x20mm PCB Clip + 1A Slow-Blow AC Mains Safety Fuse,2,Hand-Soldered THT,0.60,1.20,https://www.mouser.com/c/circuit-protection/fuses/cartridge-fuses/?series=5x20mm
-27,J1,JST-PH 2.0mm 2-Pin Battery Receptacle Male Right-Angle,2,Hand-Soldered THT,0.50,1.00,https://www.lcsc.com/search?q=C131337
-28,Tool,FNIRSI DSO153 Pocket Mini-Oscilloscope & Signal Generator,1,Diagnostic Tool,65.30,65.30,https://www.takealot.com/fnirsi-dso153-mini-oscilloscope-signal-generator-with-oscillosc/PLID95593848
-29,Battery,1S 3.7V 2000mAh Li-ion Battery Pack with JST-PH Connector,1,Self-Owned ($0.00),0.00,0.00,https://www.adafruit.com/product/2011 (Reusing bench battery)
-30,Enclosure,Custom Snap-Fit Wall-Mount Case (PLA 3D Printed Locally),1,Self-Fabricated ($0.00),0.00,0.00,https://github.com/kylerichter36-coder/GridWatcher (Printing locally)
-31,Programmer,4-Pin Gold Pogo-Pin USB-Serial-JTAG Programming Fixture,1,Self-Built ($0.00),0.00,0.00,https://github.com/kylerichter36-coder/GridWatcher (Built from scrap)
-32,Hand Tools,"Soldering Station, Lead-Free Solder, Flux, Cutters, Multimeter",1,Self-Owned ($0.00),0.00,0.00,https://www.pine64.org/pinecil/ (Workbench tools)
+22,JLCPCB Shipping,JLCPCB Express Courier Delivery (0.79 kg DHL/FedEx to SA),1,JLCPCB Logistics,38.66,38.66,https://jlcpcb.com
+23,U1,Hi-Link HLK-10M05 10W (5V 2A) AC-DC Module (Micro Robotics),2,Micro Robotics (SA),4.95,9.90,https://www.robotics.org.za/HLK-10M05
+24,RV1,Varistor MOV 275VAC 350VDC 5mm Pitch 4-Pk (Micro Robotics 5D431),2,Micro Robotics (SA),0.56,1.11,https://www.robotics.org.za/5D431
+25,F1,Glass Fuses 1A 250V 20mm 4-Pack (Micro Robotics FUSE20-1A),1,Micro Robotics (SA),0.17,0.17,https://www.robotics.org.za/FUSE20-1A
+26,Delivery (SA),Micro Robotics National Flat-Rate Courier + 15% VAT,1,Micro Robotics (SA),9.22,9.22,https://www.robotics.org.za/
+27,TR1,Zhe Ming Lang Xi ZMPT101B 2mA:2mA 1:1 Voltage Transformer (C111858),2,LCSC Electronics,1.01,2.03,https://www.lcsc.com/product-detail/Voltage-Transformers_ZHE-MING-LANG-XI-ZMPT101B_C111858.html
+28,F1 Clips,5x20mm PCB Through-Hole Fuse Clips (LCSC C3130 / XFCN),4,LCSC Electronics,0.10,0.40,https://www.lcsc.com/product-detail/_C3130.html
+29,J1,JST-PH 2.0mm 2-Pin Battery Receptacle Male Right-Angle (C131337),2,LCSC Electronics,0.50,1.00,https://www.lcsc.com/product-detail/XH-Connectors_JST-Sales-America_S2B-PH-K-S-LF-SN_C131337.html
+30,LCSC Shipping,Consolidated Shipping with open JLCPCB DHL parcel,1,LCSC Logistics,0.00,0.00,https://www.lcsc.com/ (Combined with JLCPCB)
+31,Diagnostic Tool,FNIRSI DSO153 Pocket Mini-Oscilloscope & Signal Generator,1,Takealot (SA),65.30,65.30,https://www.takealot.com/fnirsi-dso153-mini-oscilloscope-signal-generator-with-oscillosc/PLID95593848
+32,Battery,1S 3.7V 2000mAh Li-ion Battery Pack with JST-PH Connector,1,Self-Owned ($0.00),0.00,0.00,https://www.adafruit.com/product/2011 (Reusing bench battery)
+33,Enclosure,Custom Snap-Fit Wall-Mount Case (PLA 3D Printed Locally),1,Self-Fabricated ($0.00),0.00,0.00,https://github.com/kylerichter36-coder/GridWatcher (Printing locally)
+34,Programmer,4-Pin Gold Pogo-Pin USB-Serial-JTAG Programming Fixture,1,Self-Built ($0.00),0.00,0.00,https://github.com/kylerichter36-coder/GridWatcher (Built from scrap)
+35,Hand Tools,"Soldering Station, Lead-Free Solder, Flux, Cutters, Multimeter",1,Self-Owned ($0.00),0.00,0.00,https://www.pine64.org/pinecil/ (Workbench tools)

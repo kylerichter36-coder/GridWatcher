@@ -149,13 +149,14 @@ The complete Bill of Materials with supplier links and prices is available in [b
 
 | Category | Description | Sourcing | Cost (USD) | Cost (ZAR) |
 | :--- | :--- | :--- | :---: | :---: |
-| **JLCPCB SMT Order** | 2 Assembled PCBAs (Top SMT) + 5 Bare 2-Layer PCBs + Courier Delivery | JLCPCB | $327.45 | R 5,959.59 |
-| **Hand-Soldered THT Parts** | Hi-Link SMPS, ZMPT101K transformer, MOV, 1A fuse, JST-PH battery header | LCSC / Local | $15.00 | R 273.00 |
-| **Diagnostic Tool** | FNIRSI DSO153 Pocket Mini-Oscilloscope (Bare-minimum tool for AC safety) | Takealot | $65.30 | R 1,189.00 |
+| **JLCPCB SMT Order** | 2 Assembled PCBAs (Top SMT) + 5 Bare 2-Layer PCBs + Courier Delivery | JLCPCB | $327.85 | R 5,901.30 |
+| **Micro Robotics Order** | Hi-Link 10W SMPS (x2), 275V Varistors (x2 pk), 1A Glass Fuses, RAM Delivery | Micro Robotics SA | $20.40 | R 366.85 |
+| **LCSC Consolidated** | ZMPT101B Transformers (x2), 5x20mm PCB Clips (x4), JST Header (x2) | LCSC (Combined) | $3.43 | R 61.74 |
+| **Diagnostic Tool** | FNIRSI DSO153 Pocket Mini-Oscilloscope (Takealot SA) | Takealot | $65.30 | R 1,175.00 |
 | **Self-Owned ($0)** | 1S 3.7V Li-ion battery, 3D printed enclosure, pogo jig, soldering tools | Reused | $0.00 | R 0.00 |
-| **Total Project Funding** | **Hack Club Grant Funding Request** | **HCB Card** | **$407.75** | **R 7,421.59** |
+| **Total Project Funding** | **Hack Club Grant Funding Request** | **HCB Card** | **$416.98** | **R 7,504.89** |
 
-*(Calculated at 1 USD = ~18.20 ZAR)*
+*(Calculated at 1 USD = ~18.00 ZAR based on official supplier receipts and quotes)*
 
 ---
 

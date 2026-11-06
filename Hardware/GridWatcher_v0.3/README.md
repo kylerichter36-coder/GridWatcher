@@ -47,11 +47,11 @@ All production outputs are located in this directory:
 ### Component Sourcing & Errata
 
 1. **Through-Hole Parts (Manual Post-Assembly):**
-   * `U1`: Hi-Link HLK-10M05 isolated AC-DC module
-   * `TR1`: ZMPT101K voltage transformer
-   * `RV1`: 10D471K 275VAC metal oxide varistor
-   * `F1`: 5x20 mm PCB fuse clips
-   * `J1`: JST-PH 2.0 mm right-angle 2-pin connector
+   * `U1`: Hi-Link HLK-10M05 isolated AC-DC module (Micro Robotics SA)
+   * `TR1`: ZMPT101B / ZMPT101K precision 2mA:2mA voltage transformer (LCSC C111858)
+   * `RV1`: 275VAC metal oxide varistor (Micro Robotics 5D431 / 10D471K)
+   * `F1`: 5x20 mm PCB fuse clips (LCSC C3130) + 1A glass cartridge fuse (Micro Robotics FUSE20-1A)
+   * `J1`: JST-PH 2.0 mm right-angle 2-pin battery connector (LCSC C131337)
 2. **SMT Pick-and-Place Feeder Codes:**
    * `Q1, Q2`: SOT-23 N-channel MOSFETs (`C52895` onsemi BSS138).
    * `J2`: Hinged Nano-SIM 6-pin socket (`C2963104` BOOMELE NANO SIM 6PIN).
