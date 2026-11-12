@@ -1,10 +1,12 @@
-# Sensitive credentials files (never push to GitHub)
+# Sensitive credentials & private server state (never push to GitHub)
 secrets.h
 **/secrets.h
 secrets.json
 **/secrets.json
 .env
 **/.env
+windows_trainer/server_state/
+windows_trainer/telemetry.csv
 
 # Temporary & build files
 *.bin
@@ -14,6 +16,9 @@ build/
 scratch/
 .system_generated/
 __pycache__/
+windows_trainer/models/cluster_*
+!windows_trainer/models/cluster_global.bin
+!windows_trainer/models/cluster_global.json
 
 # KiCad and editor locks / backups
 *.lck
@@ -23,4 +28,3 @@ __pycache__/
 .history/
 **/monitoring v0.2/.history/
 test_udp.py
-

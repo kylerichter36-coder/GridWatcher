@@ -1,4 +1,14 @@
 {
-  "version": 40,
-  "build_time": "2026-08-21 06:32:29"
+  "version": 58,
+  "schema_version": 3,
+  "feature_hash": "0xB7DCECA1",
+  "build_time": "2026-11-12 06:16:38",
+  "metrics": {
+    "event_recall_at_20s_pct": 100.0,
+    "mean_lead_time_s": 52.0,
+    "false_alarms_per_day": 0.0,
+    "pr_auc": 0.9936,
+    "f1_score": 0.9474,
+    "episodes_evaluated": 1
+  }
 }

@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GridWatcher v0.3 - Grid Telemetry & Outage Risk Map</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --panel: #111827;
+      --border: #1e293b;
+      --text: #f1f5f9;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --ok: #22c55e;
+      --warn: #eab308;
+      --crit: #ef4444;
+      --maint: #3b82f6;
+      --dead: #a855f7;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+    header {
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .brand h1 { font-size: 1.2rem; color: var(--accent); letter-spacing: 0.3px; }
+    .badge {
+      background: #1e293b;
+      color: #a5f3fc;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 0.78rem;
+      font-family: Consolas, monospace;
+      border: 1px solid #334155;
+    }
+    .layout {
+      display: grid;
+      grid-template-columns: 1.45fr 1fr;
+      gap: 16px;
+      padding: 16px 24px;
+      flex: 1;
+    }
+    @media (max-width: 980px) { .layout { grid-template-columns: 1fr; } }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .card h2 {
+      font-size: 0.9rem;
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 0.7px;
+    }
+    #map {
+      width: 100%;
+      height: 460px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: #090d16;
+    }
+    .legend {
+      display: flex;
+      gap: 14px;
+      flex-wrap: wrap;
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+    .dot {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      margin-right: 5px;
+    }
+    .device-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      max-height: 360px;
+      overflow-y: auto;
+    }
+    .dev-item {
+      background: #0f172a;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .dev-top { display: flex; justify-content: space-between; align-items: center; }
+    .dev-name { font-weight: 700; font-size: 0.95rem; }
+    .status-pill {
+      padding: 3px 9px;
+      border-radius: 6px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      font-family: Consolas, monospace;
+    }
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      font-family: Consolas, monospace;
+      font-size: 0.8rem;
+      color: #cbd5e1;
+      margin-top: 4px;
+    }
+    .metric-box {
+      background: #111827;
+      padding: 6px 8px;
+      border-radius: 6px;
+      border: 1px solid #1e293b;
+    }
+    .metric-label { font-size: 0.68rem; color: var(--muted); display: block; }
+    .maint-box {
+      background: rgba(59, 130, 246, 0.12);
+      border: 1px solid rgba(59, 130, 246, 0.4);
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 0.82rem;
+      color: #bfdbfe;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <h1>GridWatcher v0.3 - Live Grid Map</h1>
+      <span class="badge" id="schema-badge">Schema v3</span>
+    </div>
+    <div style="display:flex; gap:10px; align-items:center;">
+      <span class="badge" id="server-time">Connecting...</span>
+    </div>
+  </header>
+
+  <div class="layout">
+    <div class="card">
+      <h2>Feeder & Substation Telemetry (Ekurhuleni Grid)</h2>
+      <div id="map"></div>
+      <div class="legend">
+        <span><i class="dot" style="background:var(--ok)"></i>Online & Stable</span>
+        <span><i class="dot" style="background:var(--warn)"></i>Elevated Risk (40-69%)</span>
+        <span><i class="dot" style="background:var(--crit)"></i>Pre-Outage Warning (&ge;70%)</span>
+        <span><i class="dot" style="background:var(--dead)"></i>Mains Lost (LiPo Backup)</span>
+        <span><i class="dot" style="background:var(--maint)"></i>Scheduled Maintenance</span>
+      </div>
+    </div>
+
+    <div style="display:flex; flex-direction:column; gap:16px;">
+      <div class="card">
+        <h2>Active Nodes & Cluster Telemetry</h2>
+        <div class="device-list" id="device-list"></div>
+      </div>
+
+      <div class="card">
+        <h2>Municipal Scheduled Maintenance (Ekurhuleni / Eskom)</h2>
+        <div id="maint-list" style="display:flex; flex-direction:column; gap:8px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const map = L.map('map').setView([-26.2165, 28.2050], 12);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      attribution: '&copy; OpenStreetMap & CARTO'
+    }).addTo(map);
+    const markers = {};
+
+    function esc(val) {
+      return String(val ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function statusColor(status) {
+      if (status === 'CRITICAL_PRE_OUTAGE_RISK') return '#ef4444';
+      if (status === 'MAINS_LOST_ON_BATTERY') return '#a855f7';
+      if (status === 'ELEVATED_RISK') return '#eab308';
+      if (status === 'SCHEDULED_MAINTENANCE' || status === 'MAINTENANCE_ADVISORY') return '#3b82f6';
+      return '#22c55e';
+    }
+
+    async function refreshMap() {
+      try {
+        const res = await fetch('/api/v1/public/map');
+        const data = await res.json();
+        document.getElementById('server-time').textContent = 'Updated: ' + data.server_time;
+        document.getElementById('schema-badge').textContent =
+          `Schema v${data.schema_version} | Hash ${data.feature_hash}`;
+
+        const devContainer = document.getElementById('device-list');
+        devContainer.innerHTML = '';
+
+        data.devices.forEach(d => {
+          const col = statusColor(d.status);
+          const lat = Number(d.lat) || -26.2178;
+          const lon = Number(d.lon) || 28.1675;
+          if (!markers[d.device_id]) {
+            markers[d.device_id] = L.circleMarker([lat, lon], {
+              radius: 10, fillColor: col, color: '#fff', weight: 2, fillOpacity: 0.9
+            }).addTo(map);
+          } else {
+            markers[d.device_id].setLatLng([lat, lon]);
+            markers[d.device_id].setStyle({ fillColor: col });
+          }
+          markers[d.device_id].bindPopup(
+            `<b>${esc(d.name)}</b> (${esc(d.device_id)})<br/>` +
+            `Suburb: ${esc(d.suburb)} | Cluster: ${esc(d.cluster_id)}<br/>` +
+            `Voltage: <b>${Number(d.v_rms).toFixed(1)}V</b> (Base ${Number(d.v_baseline).toFixed(1)}V)<br/>` +
+            `Freq: <b>${Number(d.f_hz).toFixed(2)}Hz</b> (ZX Jitter: ${Number(d.f_cycle_jitter).toFixed(1)}mHz)<br/>` +
+            `Pre-Outage Risk: <b>${Number(d.risk_score).toFixed(1)}%</b> | Status: ${esc(d.status)}`
+          );
+
+          const div = document.createElement('div');
+          div.className = 'dev-item';
+          div.innerHTML = `
+            <div class="dev-top">
+              <div>
+                <span class="dev-name">${esc(d.name)}</span>
+                <span style="font-size:0.75rem; color:#94a3b8; margin-left:6px;">(${esc(d.device_id)} &middot; ${esc(d.suburb)})</span>
+              </div>
+              <span class="status-pill" style="background:${col}22; color:${col}; border:1px solid ${col}">
+                ${esc(d.status)} &middot; ${Number(d.risk_score).toFixed(1)}% RISK
+              </span>
+            </div>
+            <div style="font-size:0.75rem; color:#94a3b8;">
+              Cluster: <b style="color:#38bdf8">${esc(d.cluster_id)}</b> (Feeder corr r=${Number(d.correlation_with_cluster).toFixed(2)}) &middot; Model v${Number(d.model_version)} &middot; LiPo ${Number(d.battery_pct)}%
+            </div>
+            <div class="metrics-grid">
+              <div class="metric-box"><span class="metric-label">AC Voltage</span>${Number(d.v_rms).toFixed(1)} V</div>
+              <div class="metric-box"><span class="metric-label">Line Freq</span>${Number(d.f_hz).toFixed(2)} Hz</div>
+              <div class="metric-box"><span class="metric-label">ZX Jitter</span>${Number(d.f_cycle_jitter).toFixed(1)} mHz</div>
+              <div class="metric-box"><span class="metric-label">~PGOOD Mains</span>${d.mains_pgood_ok ? 'ONLINE' : 'ON LIPO'}</div>
+            </div>
+          `;
+          devContainer.appendChild(div);
+        });
+
+        const maintContainer = document.getElementById('maint-list');
+        maintContainer.innerHTML = '';
+        (data.maintenance_windows || []).slice(-4).reverse().forEach(m => {
+          const mDiv = document.createElement('div');
+          mDiv.className = 'maint-box';
+          const lacs = (m.cell_lacs || []).map(esc).join(', ');
+          mDiv.innerHTML = `<b>${esc(m.source)} - ${esc(m.suburb)}</b> (LACs: ${lacs})<br/>${esc(m.raw_text)}`;
+          maintContainer.appendChild(mDiv);
+        });
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    refreshMap();
+    setInterval(refreshMap, 2500);
+  </script>
+</body>
+</html>

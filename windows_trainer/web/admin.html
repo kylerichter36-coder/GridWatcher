@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GridWatcher v0.3 - Local Admin Console</title>
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --panel: #111827;
+      --border: #1e293b;
+      --text: #f1f5f9;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      padding: 20px 28px;
+    }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      padding: 16px 20px;
+      border-radius: 10px;
+      margin-bottom: 18px;
+    }
+    h1 { font-size: 1.2rem; color: var(--accent); }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+    @media (max-width: 980px) { .grid { grid-template-columns: 1fr; } }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .card h2 { font-size: 0.9rem; color: var(--accent); text-transform: uppercase; }
+    button {
+      background: #0284c7;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      padding: 9px 14px;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 0.84rem;
+    }
+    button:hover { background: #0369a1; }
+    button.green { background: #16a34a; }
+    button.green:hover { background: #15803d; }
+    button.red { background: #dc2626; }
+    button.red:hover { background: #b91c1c; }
+    input, textarea, select {
+      background: #0f172a;
+      color: var(--text);
+      border: 1px solid #334155;
+      border-radius: 6px;
+      padding: 8px 10px;
+      font-family: inherit;
+      font-size: 0.85rem;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+    th, td {
+      border-bottom: 1px solid var(--border);
+      padding: 8px 6px;
+      text-align: left;
+    }
+    th { color: var(--muted); font-weight: 600; }
+    .log-box {
+      background: #090d16;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px;
+      font-family: Consolas, monospace;
+      font-size: 0.8rem;
+      color: #a5f3fc;
+      min-height: 90px;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>GridWatcher v0.3 - Localhost Admin Console</h1>
+      <p style="font-size:0.8rem; color:var(--muted); margin-top:4px;">
+        Bound to 127.0.0.1 &middot; HMAC-SHA256 device authentication active &middot; Public Map at <a href="/" style="color:var(--accent)">/</a>
+      </p>
+    </div>
+    <div style="display:flex; gap:10px;">
+      <button class="green" onclick="triggerRetrain('global')">Retrain Base &amp; Cluster Models</button>
+    </div>
+  </header>
+
+  <div class="grid">
+    <div class="card">
+      <h2>Maker Faire Shenzhen - Feeder Collapse Replay</h2>
+      <p style="font-size:0.82rem; color:var(--muted);">
+        Replay a recorded South African feeder sag/collapse on <b>GW-ZA-EKU-001</b>:
+      </p>
+      <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        <button onclick="runReplay('normal')">1. Normal Grid (230.0V / 50.00Hz)</button>
+        <button class="red" onclick="runReplay('precursor_warning')">2. 30s Pre-Outage Sag &amp; ZX Jitter (88.6% Risk)</button>
+        <button style="background:#7e22ce;" onclick="runReplay('blackout')">3. Blackout (~PGOOD Loss / On LiPo)</button>
+      </div>
+      <div class="log-box" id="admin-log">[ready] waiting for command...</div>
+    </div>
+
+    <div class="card">
+      <h2>Municipal Maintenance Notice Parser</h2>
+      <p style="font-size:0.82rem; color:var(--muted);">
+        Paste a City of Ekurhuleni (@CoE_Call_Centre) or municipal notice to tag affected suburbs and cellular LACs as <b>SCHEDULED_MAINTENANCE</b>:
+      </p>
+      <textarea id="maint-text" rows="3" placeholder="e.g. City of Ekurhuleni Notice: Planned power interruption in Germiston and Edenvale for 4 hours due to substation maintenance."></textarea>
+      <button onclick="submitMaintNotice()">Parse &amp; Register Maintenance Window</button>
+    </div>
+
+    <div class="card" style="grid-column: 1 / -1;">
+      <h2>Regional Clusters &amp; TinyML Metrics (Recall @ &ge;20s Lead, FA/Day, PR-AUC)</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Cluster ID</th>
+            <th>Suburb &amp; LACs</th>
+            <th>Adaptation Mode</th>
+            <th>Model Ver</th>
+            <th>Recall @ &ge;20s</th>
+            <th>False Alarms/Day</th>
+            <th>PR-AUC</th>
+            <th>Devices</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="clusters-tbody"></tbody>
+      </table>
+    </div>
+
+    <div class="card" style="grid-column: 1 / -1;">
+      <h2>Pre-Drop Signature Gate &amp; Event Quarantine Log</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Event ID</th>
+            <th>Device</th>
+            <th>Suburb</th>
+            <th>Classification</th>
+            <th>Train Eligible</th>
+            <th>Reason</th>
+            <th>Override</th>
+          </tr>
+        </thead>
+        <tbody id="events-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    function esc(val) {
+      return String(val ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function logMsg(msg) {
+      const box = document.getElementById('admin-log');
+      box.textContent = `[${new Date().toLocaleTimeString()}] ${msg}\n` + box.textContent;
+    }
+
+    async function loadOverview() {
+      const res = await fetch('/api/v1/admin/overview');
+      const data = await res.json();
+
+      const cBody = document.getElementById('clusters-tbody');
+      cBody.innerHTML = '';
+      Object.values(data.clusters || {}).forEach(c => {
+        const m = c.metrics || {};
+        const tr = document.createElement('tr');
+        const cid = esc(c.cluster_id);
+        tr.innerHTML = `
+          <td><b>${cid}</b></td>
+          <td>${esc(c.suburb)} (LAC ${(c.cell_lacs||[]).map(esc).join(',')})</td>
+          <td>${esc(c.adaptation_mode)}</td>
+          <td>v${Number(c.model_version)}</td>
+          <td style="color:#4ade80; font-weight:bold;">${Number(m.event_recall_at_20s_pct ?? 100)}%</td>
+          <td>${Number(m.false_alarms_per_day ?? 0)}</td>
+          <td>${Number(m.pr_auc ?? 0.99)}</td>
+          <td>${(c.devices||[]).map(esc).join(', ')}</td>
+          <td><button data-cid="${cid}" class="retrain-btn">Retrain</button></td>
+        `;
+        tr.querySelector('.retrain-btn').addEventListener('click', () => triggerRetrain(c.cluster_id));
+        cBody.appendChild(tr);
+      });
+
+      const eBody = document.getElementById('events-tbody');
+      eBody.innerHTML = '';
+      (data.events || []).forEach(ev => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${esc(ev.event_id)}</td>
+          <td>${esc(ev.device_id)}</td>
+          <td>${esc(ev.suburb || '')}</td>
+          <td><b>${esc(ev.event_type)}</b></td>
+          <td>${ev.train_eligible ? 'YES' : 'QUARANTINED'}</td>
+          <td>${esc(ev.reason)}</td>
+          <td>
+            <button class="btn-unplug">Mark Unplug</button>
+            <button class="green btn-precursor">Mark Precursor</button>
+          </td>
+        `;
+        tr.querySelector('.btn-unplug').addEventListener('click', () => overrideEvent(ev.event_id, 'QUARANTINED_UNPLUG'));
+        tr.querySelector('.btn-precursor').addEventListener('click', () => overrideEvent(ev.event_id, 'PRECURSOR_OUTAGE'));
+        eBody.appendChild(tr);
+      });
+    }
+
+    async function triggerRetrain(clusterId) {
+      logMsg(`Training 10-feature tree ensemble for ${clusterId}...`);
+      const res = await fetch('/api/v1/admin/retrain', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({cluster_id: clusterId})
+      });
+      const out = await res.json();
+      logMsg(`Retrained ${clusterId} -> v${out.model_meta.model_version} (${out.model_meta.binary_size_bytes} B) | ${JSON.stringify(out.model_meta.metrics)}`);
+      loadOverview();
+    }
+
+    async function runReplay(stage) {
+      const res = await fetch('/api/v1/admin/shenzhen-replay', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({device_id: 'GW-ZA-EKU-001', stage})
+      });
+      const out = await res.json();
+      logMsg(`Replay '${stage}' applied to GW-ZA-EKU-001 -> ${out.device.status} (${out.device.risk_score}% risk)`);
+    }
+
+    async function submitMaintNotice() {
+      const txt = document.getElementById('maint-text').value.trim();
+      if (!txt) return;
+      const res = await fetch('/api/v1/admin/maintenance-notice', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({raw_text: txt})
+      });
+      const out = await res.json();
+      logMsg(`Registered notice ${out.window.id} for ${out.window.suburb} (LACs: ${out.window.cell_lacs.join(', ')})`);
+      document.getElementById('maint-text').value = '';
+      loadOverview();
+    }
+
+    async function overrideEvent(eventId, newType) {
+      await fetch('/api/v1/admin/override-event', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({event_id: eventId, event_type: newType})
+      });
+      logMsg(`Updated ${eventId} -> ${newType}`);
+      loadOverview();
+    }
+
+    loadOverview();
+    setInterval(loadOverview, 4000);
+  </script>
+</body>
+</html>

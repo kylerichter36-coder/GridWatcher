@@ -1,0 +1,1860 @@
+{
+  "cluster_id": "global",
+  "model_version": 57,
+  "schema_version": 3,
+  "feature_hash": "0xB7DCECA1",
+  "feature_names": [
+    "v_rms",
+    "v_delta_baseline",
+    "f_hz",
+    "f_cycle_jitter",
+    "dV_dt_10s",
+    "dF_dt_10s",
+    "v_std_30s",
+    "f_std_30s",
+    "v_slope_30s",
+    "f_slope_30s"
+  ],
+  "model_type": "RandomForest",
+  "n_trees": 11,
+  "max_depth": 4,
+  "n_nodes": 259,
+  "binary_size_bytes": 2668,
+  "build_time": "2026-11-12 06:16:37",
+  "metrics": {
+    "event_recall_at_20s_pct": 100.0,
+    "mean_lead_time_s": 46.0,
+    "false_alarms_per_day": 0.0,
+    "pr_auc": 0.9925,
+    "f1_score": 0.8785,
+    "episodes_evaluated": 2
+  },
+  "tree_roots": [
+    0,
+    19,
+    42,
+    67,
+    92,
+    113,
+    140,
+    169,
+    190,
+    219,
+    238
+  ],
+  "flat_nodes": [
+    {
+      "feature_idx": 2,
+      "tree_id": 0,
+      "left_child": 1,
+      "right_child": 16,
+      "threshold_or_prob": 50.220001
+    },
+    {
+      "feature_idx": 1,
+      "tree_id": 0,
+      "left_child": 2,
+      "right_child": 9,
+      "threshold_or_prob": -2.849306
+    },
+    {
+      "feature_idx": 8,
+      "tree_id": 0,
+      "left_child": 3,
+      "right_child": 6,
+      "threshold_or_prob": -0.058272
+    },
+    {
+      "feature_idx": 2,
+      "tree_id": 0,
+      "left_child": 4,
+      "right_child": 5,
+      "threshold_or_prob": 49.849998
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 0,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.9647
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 0,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.125748
+    },
+    {
+      "feature_idx": 0,
+      "tree_id": 0,
+      "left_child": 7,
+      "right_child": 8,
+      "threshold_or_prob": 224.563096
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 0,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.0
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 0,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.725045
+    },
+    {
+      "feature_idx": 0,
+      "tree_id": 0,
+      "left_child": 10,
+      "right_child": 13,
+      "threshold_or_prob": 229.573804
+    },
+    {
+      "feature_idx": 8,
+      "tree_id": 0,
+      "left_child": 11,
+      "right_child": 12,
+      "threshold_or_prob": -0.065162
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 0,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.548952
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 0,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.066715
+    },
+    {
+      "feature_idx": 3,
+      "tree_id": 0,
+      "left_child": 14,
+      "right_child": 15,
+      "threshold_or_prob": 7.97
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 0,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.0
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 0,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.054971
+    },
+    {
+      "feature_idx": 2,
+      "tree_id": 0,
+      "left_child": 17,
+      "right_child": 18,
+      "threshold_or_prob": 51.4345
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 0,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.0
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 0,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 1.0
+    },
+    {
+      "feature_idx": 5,
+      "tree_id": 1,
+      "left_child": 20,
+      "right_child": 35,
+      "threshold_or_prob": 0.021281
+    },
+    {
+      "feature_idx": 2,
+      "tree_id": 1,
+      "left_child": 21,
+      "right_child": 28,
+      "threshold_or_prob": 49.849998
+    },
+    {
+      "feature_idx": 8,
+      "tree_id": 1,
+      "left_child": 22,
+      "right_child": 25,
+      "threshold_or_prob": -0.041465
+    },
+    {
+      "feature_idx": 3,
+      "tree_id": 1,
+      "left_child": 23,
+      "right_child": 24,
+      "threshold_or_prob": 25.0
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 1,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.0
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 1,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.92391
+    },
+    {
+      "feature_idx": 9,
+      "tree_id": 1,
+      "left_child": 26,
+      "right_child": 27,
+      "threshold_or_prob": -0.014299
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 1,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.450056
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 1,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.0
+    },
+    {
+      "feature_idx": 3,
+      "tree_id": 1,
+      "left_child": 29,
+      "right_child": 32,
+      "threshold_or_prob": 10.483
+    },
+    {
+      "feature_idx": 3,
+      "tree_id": 1,
+      "left_child": 30,
+      "right_child": 31,
+      "threshold_or_prob": 5.03
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 1,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.023342
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 1,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.0
+    },
+    {
+      "feature_idx": 5,
+      "tree_id": 1,
+      "left_child": 33,
+      "right_child": 34,
+      "threshold_or_prob": -0.009
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 1,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.739159
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 1,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.0
+    },
+    {
+      "feature_idx": 2,
+      "tree_id": 1,
+      "left_child": 36,
+      "right_child": 37,
+      "threshold_or_prob": 51.4185
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 1,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.0
+    },
+    {
+      "feature_idx": 2,
+      "tree_id": 1,
+      "left_child": 38,
+      "right_child": 41,
+      "threshold_or_prob": 51.860001
+    },
+    {
+      "feature_idx": 8,
+      "tree_id": 1,
+      "left_child": 39,
+      "right_child": 40,
+      "threshold_or_prob": -0.010126
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 1,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.940553
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 1,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 1.0
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 1,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 1.0
+    },
+    {
+      "feature_idx": 2,
+      "tree_id": 2,
+      "left_child": 43,
+      "right_child": 58,
+      "threshold_or_prob": 50.209999
+    },
+    {
+      "feature_idx": 2,
+      "tree_id": 2,
+      "left_child": 44,
+      "right_child": 51,
+      "threshold_or_prob": 49.849998
+    },
+    {
+      "feature_idx": 1,
+      "tree_id": 2,
+      "left_child": 45,
+      "right_child": 48,
+      "threshold_or_prob": -1.0
+    },
+    {
+      "feature_idx": 8,
+      "tree_id": 2,
+      "left_child": 46,
+      "right_child": 47,
+      "threshold_or_prob": -0.032852
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 2,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.940553
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 2,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.198214
+    },
+    {
+      "feature_idx": 0,
+      "tree_id": 2,
+      "left_child": 49,
+      "right_child": 50,
+      "threshold_or_prob": 224.100006
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 2,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.0
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 2,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.548952
+    },
+    {
+      "feature_idx": 4,
+      "tree_id": 2,
+      "left_child": 52,
+      "right_child": 55,
+      "threshold_or_prob": 0.711751
+    },
+    {
+      "feature_idx": 1,
+      "tree_id": 2,
+      "left_child": 53,
+      "right_child": 54,
+      "threshold_or_prob": -2.00225
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 2,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.126417
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 2,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.0
+    },
+    {
+      "feature_idx": 3,
+      "tree_id": 2,
+      "left_child": 56,
+      "right_child": 57,
+      "threshold_or_prob": 8.184
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 2,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.0
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 2,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.61273
+    },
+    {
+      "feature_idx": 7,
+      "tree_id": 2,
+      "left_child": 59,
+      "right_child": 62,
+      "threshold_or_prob": 0.46286
+    },
+    {
+      "feature_idx": 5,
+      "tree_id": 2,
+      "left_child": 60,
+      "right_child": 61,
+      "threshold_or_prob": 0.06315
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 2,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.0
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 2,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.798202
+    },
+    {
+      "feature_idx": 2,
+      "tree_id": 2,
+      "left_child": 63,
+      "right_child": 64,
+      "threshold_or_prob": 50.84
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 2,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.0
+    },
+    {
+      "feature_idx": 9,
+      "tree_id": 2,
+      "left_child": 65,
+      "right_child": 66,
+      "threshold_or_prob": -0.008572
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 2,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.961614
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 2,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.994717
+    },
+    {
+      "feature_idx": 3,
+      "tree_id": 3,
+      "left_child": 68,
+      "right_child": 77,
+      "threshold_or_prob": 22.5
+    },
+    {
+      "feature_idx": 2,
+      "tree_id": 3,
+      "left_child": 69,
+      "right_child": 70,
+      "threshold_or_prob": 50.019299
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 3,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.0
+    },
+    {
+      "feature_idx": 5,
+      "tree_id": 3,
+      "left_child": 71,
+      "right_child": 74,
+      "threshold_or_prob": 0.01431
+    },
+    {
+      "feature_idx": 0,
+      "tree_id": 3,
+      "left_child": 72,
+      "right_child": 73,
+      "threshold_or_prob": 224.307999
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 3,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.407549
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 3,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.0
+    },
+    {
+      "feature_idx": 5,
+      "tree_id": 3,
+      "left_child": 75,
+      "right_child": 76,
+      "threshold_or_prob": 0.043
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 3,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.0
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 3,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.855766
+    },
+    {
+      "feature_idx": 5,
+      "tree_id": 3,
+      "left_child": 78,
+      "right_child": 85,
+      "threshold_or_prob": 0.04701
+    },
+    {
+      "feature_idx": 1,
+      "tree_id": 3,
+      "left_child": 79,
+      "right_child": 82,
+      "threshold_or_prob": -5.204997
+    },
+    {
+      "feature_idx": 6,
+      "tree_id": 3,
+      "left_child": 80,
+      "right_child": 81,
+      "threshold_or_prob": 6.095526
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 3,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.952867
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 3,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.0
+    },
+    {
+      "feature_idx": 0,
+      "tree_id": 3,
+      "left_child": 83,
+      "right_child": 84,
+      "threshold_or_prob": 224.0
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 3,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.126958
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 3,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.835064
+    },
+    {
+      "feature_idx": 5,
+      "tree_id": 3,
+      "left_child": 86,
+      "right_child": 89,
+      "threshold_or_prob": 0.09385
+    },
+    {
+      "feature_idx": 5,
+      "tree_id": 3,
+      "left_child": 87,
+      "right_child": 88,
+      "threshold_or_prob": 0.068019
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 3,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.0
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 3,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.778563
+    },
+    {
+      "feature_idx": 2,
+      "tree_id": 3,
+      "left_child": 90,
+      "right_child": 91,
+      "threshold_or_prob": 51.9825
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 3,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.855766
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 3,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 1.0
+    },
+    {
+      "feature_idx": 0,
+      "tree_id": 4,
+      "left_child": 93,
+      "right_child": 106,
+      "threshold_or_prob": 229.430854
+    },
+    {
+      "feature_idx": 3,
+      "tree_id": 4,
+      "left_child": 94,
+      "right_child": 99,
+      "threshold_or_prob": 17.5
+    },
+    {
+      "feature_idx": 2,
+      "tree_id": 4,
+      "left_child": 95,
+      "right_child": 96,
+      "threshold_or_prob": 50.0341
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 4,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.0
+    },
+    {
+      "feature_idx": 2,
+      "tree_id": 4,
+      "left_child": 97,
+      "right_child": 98,
+      "threshold_or_prob": 51.352501
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 4,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.0
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 4,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 1.0
+    },
+    {
+      "feature_idx": 5,
+      "tree_id": 4,
+      "left_child": 100,
+      "right_child": 103,
+      "threshold_or_prob": 0.0378
+    },
+    {
+      "feature_idx": 8,
+      "tree_id": 4,
+      "left_child": 101,
+      "right_child": 102,
+      "threshold_or_prob": -0.067641
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 4,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.904964
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 4,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.341779
+    },
+    {
+      "feature_idx": 3,
+      "tree_id": 4,
+      "left_child": 104,
+      "right_child": 105,
+      "threshold_or_prob": 202.0
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 4,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.798202
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 4,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.977968
+    },
+    {
+      "feature_idx": 3,
+      "tree_id": 4,
+      "left_child": 107,
+      "right_child": 108,
+      "threshold_or_prob": 7.93
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 4,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.0
+    },
+    {
+      "feature_idx": 3,
+      "tree_id": 4,
+      "left_child": 109,
+      "right_child": 110,
+      "threshold_or_prob": 10.032
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 4,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.0
+    },
+    {
+      "feature_idx": 7,
+      "tree_id": 4,
+      "left_child": 111,
+      "right_child": 112,
+      "threshold_or_prob": 1.334729
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 4,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.922278
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 4,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.0
+    },
+    {
+      "feature_idx": 2,
+      "tree_id": 5,
+      "left_child": 114,
+      "right_child": 127,
+      "threshold_or_prob": 50.200001
+    },
+    {
+      "feature_idx": 2,
+      "tree_id": 5,
+      "left_child": 115,
+      "right_child": 122,
+      "threshold_or_prob": 49.860001
+    },
+    {
+      "feature_idx": 8,
+      "tree_id": 5,
+      "left_child": 116,
+      "right_child": 119,
+      "threshold_or_prob": -0.047863
+    },
+    {
+      "feature_idx": 1,
+      "tree_id": 5,
+      "left_child": 117,
+      "right_child": 118,
+      "threshold_or_prob": -1.291
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 5,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.936101
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 5,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.0
+    },
+    {
+      "feature_idx": 2,
+      "tree_id": 5,
+      "left_child": 120,
+      "right_child": 121,
+      "threshold_or_prob": 49.622001
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 5,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.772229
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 5,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.124756
+    },
+    {
+      "feature_idx": 3,
+      "tree_id": 5,
+      "left_child": 123,
+      "right_child": 124,
+      "threshold_or_prob": 9.73
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 5,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.0
+    },
+    {
+      "feature_idx": 5,
+      "tree_id": 5,
+      "left_child": 125,
+      "right_child": 126,
+      "threshold_or_prob": -0.003
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 5,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.475838
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 5,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.0
+    },
+    {
+      "feature_idx": 9,
+      "tree_id": 5,
+      "left_child": 128,
+      "right_child": 133,
+      "threshold_or_prob": 0.008753
+    },
+    {
+      "feature_idx": 2,
+      "tree_id": 5,
+      "left_child": 129,
+      "right_child": 130,
+      "threshold_or_prob": 51.098
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 5,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.0
+    },
+    {
+      "feature_idx": 4,
+      "tree_id": 5,
+      "left_child": 131,
+      "right_child": 132,
+      "threshold_or_prob": 0.275
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 5,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.99566
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 5,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.798202
+    },
+    {
+      "feature_idx": 3,
+      "tree_id": 5,
+      "left_child": 134,
+      "right_child": 137,
+      "threshold_or_prob": 82.25
+    },
+    {
+      "feature_idx": 5,
+      "tree_id": 5,
+      "left_child": 135,
+      "right_child": 136,
+      "threshold_or_prob": 0.12777
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 5,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.361048
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 5,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 1.0
+    },
+    {
+      "feature_idx": 5,
+      "tree_id": 5,
+      "left_child": 138,
+      "right_child": 139,
+      "threshold_or_prob": 0.166269
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 5,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.764456
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 5,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 1.0
+    },
+    {
+      "feature_idx": 5,
+      "tree_id": 6,
+      "left_child": 141,
+      "right_child": 156,
+      "threshold_or_prob": 0.02244
+    },
+    {
+      "feature_idx": 2,
+      "tree_id": 6,
+      "left_child": 142,
+      "right_child": 149,
+      "threshold_or_prob": 49.860001
+    },
+    {
+      "feature_idx": 8,
+      "tree_id": 6,
+      "left_child": 143,
+      "right_child": 146,
+      "threshold_or_prob": -0.076238
+    },
+    {
+      "feature_idx": 0,
+      "tree_id": 6,
+      "left_child": 144,
+      "right_child": 145,
+      "threshold_or_prob": 222.199997
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 6,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.955501
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 6,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.711994
+    },
+    {
+      "feature_idx": 0,
+      "tree_id": 6,
+      "left_child": 147,
+      "right_child": 148,
+      "threshold_or_prob": 224.199997
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 6,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.0
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 6,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.825982
+    },
+    {
+      "feature_idx": 7,
+      "tree_id": 6,
+      "left_child": 150,
+      "right_child": 153,
+      "threshold_or_prob": 1.627277
+    },
+    {
+      "feature_idx": 6,
+      "tree_id": 6,
+      "left_child": 151,
+      "right_child": 152,
+      "threshold_or_prob": 5.729372
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 6,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.01664
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 6,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.12847
+    },
+    {
+      "feature_idx": 2,
+      "tree_id": 6,
+      "left_child": 154,
+      "right_child": 155,
+      "threshold_or_prob": 50.062501
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 6,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.088478
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 6,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.828604
+    },
+    {
+      "feature_idx": 5,
+      "tree_id": 6,
+      "left_child": 157,
+      "right_child": 162,
+      "threshold_or_prob": 0.090762
+    },
+    {
+      "feature_idx": 7,
+      "tree_id": 6,
+      "left_child": 158,
+      "right_child": 159,
+      "threshold_or_prob": 1.580346
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 6,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.0
+    },
+    {
+      "feature_idx": 1,
+      "tree_id": 6,
+      "left_child": 160,
+      "right_child": 161,
+      "threshold_or_prob": 0.434996
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 6,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.0
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 6,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.725045
+    },
+    {
+      "feature_idx": 9,
+      "tree_id": 6,
+      "left_child": 163,
+      "right_child": 166,
+      "threshold_or_prob": -0.024833
+    },
+    {
+      "feature_idx": 4,
+      "tree_id": 6,
+      "left_child": 164,
+      "right_child": 165,
+      "threshold_or_prob": 0.294
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 6,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.976847
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 6,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.0
+    },
+    {
+      "feature_idx": 2,
+      "tree_id": 6,
+      "left_child": 167,
+      "right_child": 168,
+      "threshold_or_prob": 51.918001
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 6,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.956804
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 6,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 1.0
+    },
+    {
+      "feature_idx": 0,
+      "tree_id": 7,
+      "left_child": 170,
+      "right_child": 183,
+      "threshold_or_prob": 229.427002
+    },
+    {
+      "feature_idx": 3,
+      "tree_id": 7,
+      "left_child": 171,
+      "right_child": 176,
+      "threshold_or_prob": 22.5
+    },
+    {
+      "feature_idx": 6,
+      "tree_id": 7,
+      "left_child": 172,
+      "right_child": 173,
+      "threshold_or_prob": 3.705157
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 7,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.0
+    },
+    {
+      "feature_idx": 5,
+      "tree_id": 7,
+      "left_child": 174,
+      "right_child": 175,
+      "threshold_or_prob": 0.038
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 7,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.0
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 7,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.664173
+    },
+    {
+      "feature_idx": 2,
+      "tree_id": 7,
+      "left_child": 177,
+      "right_child": 180,
+      "threshold_or_prob": 50.825
+    },
+    {
+      "feature_idx": 1,
+      "tree_id": 7,
+      "left_child": 178,
+      "right_child": 179,
+      "threshold_or_prob": -3.800003
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 7,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.84061
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 7,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.127779
+    },
+    {
+      "feature_idx": 2,
+      "tree_id": 7,
+      "left_child": 181,
+      "right_child": 182,
+      "threshold_or_prob": 51.876
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 7,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.887778
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 7,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 1.0
+    },
+    {
+      "feature_idx": 2,
+      "tree_id": 7,
+      "left_child": 184,
+      "right_child": 189,
+      "threshold_or_prob": 49.9809
+    },
+    {
+      "feature_idx": 2,
+      "tree_id": 7,
+      "left_child": 185,
+      "right_child": 188,
+      "threshold_or_prob": 49.963799
+    },
+    {
+      "feature_idx": 6,
+      "tree_id": 7,
+      "left_child": 186,
+      "right_child": 187,
+      "threshold_or_prob": 2.434688
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 7,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.0
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 7,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.703552
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 7,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.0
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 7,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.0
+    },
+    {
+      "feature_idx": 3,
+      "tree_id": 8,
+      "left_child": 191,
+      "right_child": 204,
+      "threshold_or_prob": 33.25
+    },
+    {
+      "feature_idx": 5,
+      "tree_id": 8,
+      "left_child": 192,
+      "right_child": 197,
+      "threshold_or_prob": 0.00424
+    },
+    {
+      "feature_idx": 7,
+      "tree_id": 8,
+      "left_child": 193,
+      "right_child": 194,
+      "threshold_or_prob": 1.581476
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 8,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.0
+    },
+    {
+      "feature_idx": 0,
+      "tree_id": 8,
+      "left_child": 195,
+      "right_child": 196,
+      "threshold_or_prob": 223.928654
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 8,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.255926
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 8,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.0
+    },
+    {
+      "feature_idx": 9,
+      "tree_id": 8,
+      "left_child": 198,
+      "right_child": 201,
+      "threshold_or_prob": 0.016728
+    },
+    {
+      "feature_idx": 9,
+      "tree_id": 8,
+      "left_child": 199,
+      "right_child": 200,
+      "threshold_or_prob": -0.04382
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 8,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.255926
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 8,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.0
+    },
+    {
+      "feature_idx": 1,
+      "tree_id": 8,
+      "left_child": 202,
+      "right_child": 203,
+      "threshold_or_prob": -1.404605
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 8,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.84061
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 8,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.255926
+    },
+    {
+      "feature_idx": 3,
+      "tree_id": 8,
+      "left_child": 205,
+      "right_child": 212,
+      "threshold_or_prob": 231.5
+    },
+    {
+      "feature_idx": 2,
+      "tree_id": 8,
+      "left_child": 206,
+      "right_child": 209,
+      "threshold_or_prob": 50.732499
+    },
+    {
+      "feature_idx": 8,
+      "tree_id": 8,
+      "left_child": 207,
+      "right_child": 208,
+      "threshold_or_prob": -0.055914
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 8,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.740712
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 8,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.249644
+    },
+    {
+      "feature_idx": 2,
+      "tree_id": 8,
+      "left_child": 210,
+      "right_child": 211,
+      "threshold_or_prob": 50.869999
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 8,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.0
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 8,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.981837
+    },
+    {
+      "feature_idx": 2,
+      "tree_id": 8,
+      "left_child": 213,
+      "right_child": 216,
+      "threshold_or_prob": 51.321501
+    },
+    {
+      "feature_idx": 9,
+      "tree_id": 8,
+      "left_child": 214,
+      "right_child": 215,
+      "threshold_or_prob": -0.006613
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 8,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.601091
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 8,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.0
+    },
+    {
+      "feature_idx": 7,
+      "tree_id": 8,
+      "left_child": 217,
+      "right_child": 218,
+      "threshold_or_prob": 1.859433
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 8,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 1.0
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 8,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.979367
+    },
+    {
+      "feature_idx": 2,
+      "tree_id": 9,
+      "left_child": 220,
+      "right_child": 231,
+      "threshold_or_prob": 50.209999
+    },
+    {
+      "feature_idx": 8,
+      "tree_id": 9,
+      "left_child": 221,
+      "right_child": 226,
+      "threshold_or_prob": -0.059164
+    },
+    {
+      "feature_idx": 2,
+      "tree_id": 9,
+      "left_child": 222,
+      "right_child": 225,
+      "threshold_or_prob": 49.94525
+    },
+    {
+      "feature_idx": 1,
+      "tree_id": 9,
+      "left_child": 223,
+      "right_child": 224,
+      "threshold_or_prob": -1.489999
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 9,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.948291
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 9,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.352993
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 9,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.0
+    },
+    {
+      "feature_idx": 3,
+      "tree_id": 9,
+      "left_child": 227,
+      "right_child": 228,
+      "threshold_or_prob": 20.0
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 9,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.0
+    },
+    {
+      "feature_idx": 0,
+      "tree_id": 9,
+      "left_child": 229,
+      "right_child": 230,
+      "threshold_or_prob": 224.300003
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 9,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.0
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 9,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.673598
+    },
+    {
+      "feature_idx": 2,
+      "tree_id": 9,
+      "left_child": 232,
+      "right_child": 233,
+      "threshold_or_prob": 51.0275
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 9,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.0
+    },
+    {
+      "feature_idx": 2,
+      "tree_id": 9,
+      "left_child": 234,
+      "right_child": 237,
+      "threshold_or_prob": 52.420001
+    },
+    {
+      "feature_idx": 5,
+      "tree_id": 9,
+      "left_child": 235,
+      "right_child": 236,
+      "threshold_or_prob": 0.132066
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 9,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.759867
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 9,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 1.0
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 9,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 1.0
+    },
+    {
+      "feature_idx": 3,
+      "tree_id": 10,
+      "left_child": 239,
+      "right_child": 246,
+      "threshold_or_prob": 30.0
+    },
+    {
+      "feature_idx": 2,
+      "tree_id": 10,
+      "left_child": 240,
+      "right_child": 241,
+      "threshold_or_prob": 50.019699
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 10,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.0
+    },
+    {
+      "feature_idx": 5,
+      "tree_id": 10,
+      "left_child": 242,
+      "right_child": 243,
+      "threshold_or_prob": 0.02371
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 10,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.0
+    },
+    {
+      "feature_idx": 7,
+      "tree_id": 10,
+      "left_child": 244,
+      "right_child": 245,
+      "threshold_or_prob": 2.679368
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 10,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.429685
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 10,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 1.0
+    },
+    {
+      "feature_idx": 2,
+      "tree_id": 10,
+      "left_child": 247,
+      "right_child": 254,
+      "threshold_or_prob": 50.310001
+    },
+    {
+      "feature_idx": 1,
+      "tree_id": 10,
+      "left_child": 248,
+      "right_child": 251,
+      "threshold_or_prob": -5.936996
+    },
+    {
+      "feature_idx": 6,
+      "tree_id": 10,
+      "left_child": 249,
+      "right_child": 250,
+      "threshold_or_prob": 5.811614
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 10,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.988889
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 10,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.0
+    },
+    {
+      "feature_idx": 0,
+      "tree_id": 10,
+      "left_child": 252,
+      "right_child": 253,
+      "threshold_or_prob": 224.615005
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 10,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.105604
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 10,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.910484
+    },
+    {
+      "feature_idx": 2,
+      "tree_id": 10,
+      "left_child": 255,
+      "right_child": 258,
+      "threshold_or_prob": 51.52
+    },
+    {
+      "feature_idx": 2,
+      "tree_id": 10,
+      "left_child": 256,
+      "right_child": 257,
+      "threshold_or_prob": 51.059501
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 10,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.0
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 10,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 0.725045
+    },
+    {
+      "feature_idx": -1,
+      "tree_id": 10,
+      "left_child": -1,
+      "right_child": -1,
+      "threshold_or_prob": 1.0
+    }
+  ]
+}
