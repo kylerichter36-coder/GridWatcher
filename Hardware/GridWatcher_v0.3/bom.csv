@@ -28,9 +28,9 @@ Item,Designator,Description,Qty,Category / Sourcing,Unit Price (USD),Total (USD)
 27,TR1,Zhe Ming Lang Xi ZMPT101B 2mA:2mA 1:1 Voltage Transformer (C111858),2,LCSC Electronics,1.01,2.03,https://www.lcsc.com/product-detail/Voltage-Transformers_ZHE-MING-LANG-XI-ZMPT101B_C111858.html
 28,F1 Clips,5x20mm PCB Through-Hole Fuse Clips (LCSC C3130 / XFCN),4,LCSC Electronics,0.10,0.40,https://www.lcsc.com/product-detail/_C3130.html
 29,J1,JST-PH 2.0mm 2-Pin Battery Receptacle Male Right-Angle (C131337),2,LCSC Electronics,0.50,1.00,https://www.lcsc.com/product-detail/XH-Connectors_JST-Sales-America_S2B-PH-K-S-LF-SN_C131337.html
-30,LCSC Shipping,Consolidated Shipping with open JLCPCB DHL parcel,1,LCSC Logistics,0.00,0.00,https://www.lcsc.com/ (Combined with JLCPCB)
+30,LCSC Shipping,Consolidated Shipping with open JLCPCB DHL parcel,1,LCSC Logistics,0.00,0.00,https://www.lcsc.com/
 31,Diagnostic Tool,FNIRSI DSO153 Pocket Mini-Oscilloscope & Signal Generator,1,Takealot (SA),65.30,65.30,https://www.takealot.com/fnirsi-dso153-mini-oscilloscope-signal-generator-with-oscillosc/PLID95593848
-32,Battery,1S 3.7V 2000mAh Li-ion Battery Pack with JST-PH Connector,1,Self-Owned ($0.00),0.00,0.00,https://www.adafruit.com/product/2011 (Reusing bench battery)
-33,Enclosure,Custom Snap-Fit Wall-Mount Case (PLA 3D Printed Locally),1,Self-Fabricated ($0.00),0.00,0.00,https://github.com/kylerichter36-coder/GridWatcher (Printing locally)
-34,Programmer,4-Pin Gold Pogo-Pin USB-Serial-JTAG Programming Fixture,1,Self-Built ($0.00),0.00,0.00,https://github.com/kylerichter36-coder/GridWatcher (Built from scrap)
-35,Hand Tools,"Soldering Station, Lead-Free Solder, Flux, Cutters, Multimeter",1,Self-Owned ($0.00),0.00,0.00,https://www.pine64.org/pinecil/ (Workbench tools)
+32,Battery,1S 3.7V 2000mAh Li-ion Battery Pack with JST-PH Connector,1,Self-Owned ($0.00),0.00,0.00,https://www.adafruit.com/product/2011
+33,Enclosure,Custom Snap-Fit Wall-Mount Case (PLA 3D Printed Locally),1,Self-Fabricated ($0.00),0.00,0.00,https://github.com/kylerichter36-coder/GridWatcher
+34,Programmer,4-Pin Gold Pogo-Pin USB-Serial-JTAG Programming Fixture,1,Self-Built ($0.00),0.00,0.00,https://github.com/kylerichter36-coder/GridWatcher
+35,Hand Tools,"Soldering Station, Lead-Free Solder, Flux, Cutters, Multimeter",1,Self-Owned ($0.00),0.00,0.00,https://www.pine64.org/pinecil/
